@@ -214,3 +214,51 @@ TEST_CASE("pfmatrix add_*") {
     SECTION("add_pow, 8") { test_add_pow(c, 1, -2, 1/y, -3); };
     SECTION("add_pow, 9") { test_add_pow(c, y, -1, 0, -2); };
 }
+
+TEST_CASE("pfmatrix with_*") {
+    symbol x("x"), y("y");
+    matrix m = {
+        {x+2+3/(x-y)+4/x/x, 5+6/x, 7*x*x, 8/x/x},
+        {9*x+10/x/(x-y), 11*x*x+12/x, 13+14/(x-y)+15/x/x, 0},
+        {16/x+17/x/x, 18*x*x+19, 20*x+21/x, 22+24*x+25/x},
+        {26, 27*x*x + 28/x, 29/x/(x-y), 30/x+31*x},
+    };
+    pfmatrix pfm(m, x);
+    REQUIRE(ratcan(m) == ratcan(pfm.to_matrix(x)));
+    SECTION("with_constant_t") {
+        matrix t = {
+            {1, 2, 3, 4},
+            {5, 4, 3, 2},
+            {0, 2, 4, 8},
+            {9, 5, 2, 1}
+        };
+        matrix mt = t.inverse().mul(m).mul(t);
+        matrix m2 = pfm.with_constant_t(t).to_matrix(x);
+        matrix m3 = pfm.with_constant_t(t.inverse(), t).to_matrix(x);
+        REQUIRE(ratcan(mt) == ratcan(m2));
+        REQUIRE(ratcan(mt) == ratcan(m3));
+    }
+    SECTION("with_balance_t") {
+        matrix u = {
+            {0, ex(3)/5, ex(4)/5, 0},
+            {ex(5)/13, 0, 0, ex(12)/13},
+        };
+        matrix p = u.transpose().mul(u);
+        REQUIRE(p.mul(p) == p);
+        SECTION("0 --> y") {
+            matrix mt = balance_t(m, p, 0, y, x);
+            matrix m2 = pfm.with_balance_t(p, 0, y).to_matrix(x);
+            REQUIRE(ratcan(mt) == ratcan(m2));
+        }
+        SECTION("y --> infinity") {
+            matrix mt = balance_t(m, p, y, infinity, x);
+            matrix m2 = pfm.with_balance_t(p, y, infinity).to_matrix(x);
+            REQUIRE(ratcan(mt) == ratcan(m2));
+        }
+        SECTION("infinity --> 0") {
+            matrix mt = balance_t(m, p, infinity, 0, x);
+            matrix m2 = pfm.with_balance_t(p, infinity, 0).to_matrix(x);
+            REQUIRE(ratcan(mt) == ratcan(m2));
+        }
+    }
+}

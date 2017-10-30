@@ -7,6 +7,27 @@
 using namespace GiNaC;
 using namespace std;
 
+matrix
+ex_to_matrix(const ex &m)
+{
+    return ex_to<matrix>(m.evalm());
+}
+
+/* Infinity object.
+ */
+struct infinity_s { infinity_s() {} };
+typedef structure<infinity_s> infinity_t;
+
+template<> void
+infinity_t::print(const print_context & c, unsigned level) const
+{
+    if (is_a<print_tree>(c))
+        inherited::print(c, level);
+    c.s << "Infinity";
+}
+
+const ex infinity = infinity_t();
+
 /* Load matrix from a file in Mathematica format.
  */
 pair<matrix, symtab>
@@ -288,23 +309,34 @@ struct pfmatrix {
     unsigned nrows;
     unsigned ncols;
 
+    pfmatrix(unsigned nrows, unsigned ncols);
     pfmatrix(const matrix &m, const symbol &x);
     matrix &operator ()(const ex &p, int k);
     matrix to_matrix(const ex &x);
     // M += C*(x-pi)^ki
-    void add(const matrix &C, const ex &pi, int ki);
-    // M += C*(x-pi)^ki/(x-x0)
-    void add_div(const matrix &C, const ex &pi, int ki, const ex &x0);
-    // M += C*(x-pi)^ki*(x-x0)
-    void add_mul(const matrix &C, const ex &pi, int ki, const ex &x0);
+    void add(const matrix &C, const ex &p1, int k1);
+    // M += C*(x-pi)^ki/(x-p2)
+    void add_div(const matrix &C, const ex &p1, int k1, const ex &p2);
+    // M += C*(x-pi)^ki*(x-p2)
+    void add_mul(const matrix &C, const ex &p1, int k1, const ex &p2);
     // M += C*(x-p1)^k1*(x-p2)^k2
     void add_pow(const matrix &C, const ex &p1, int k1, const ex &p2, int k2);
+    // M' = T^-1 M T
+    pfmatrix with_constant_t(const matrix &T) const;
+    // M' = L M R
+    pfmatrix with_constant_t(const matrix &L, const matrix &R) const;
+    pfmatrix with_balance_t(const matrix &P, const ex &x1, const ex &p2) const;
 };
 
 bool
 pfmatrix::key_is_less::operator ()(const key &k1, const key &k2) const
 {
     return (k1.second < k2.second) || ex_is_less()(k1.first, k2.first);
+}
+
+pfmatrix::pfmatrix(unsigned nrows, unsigned ncols)
+    : nrows(nrows), ncols(ncols)
+{
 }
 
 pfmatrix::pfmatrix(const matrix &m, const symbol &x)
@@ -348,51 +380,57 @@ pfmatrix::operator ()(const ex &p, int k)
 matrix
 pfmatrix::to_matrix(const ex &x)
 {
-    ex m = matrix(nrows, ncols);
-    for (const auto &k : residues) {
-        m += k.second*pow(x - k.first.first, k.first.second);
+    matrix m(nrows, ncols);
+    for (const auto &kv : residues) {
+        const auto &pi = kv.first.first;
+        const auto &ki = kv.first.second;
+        const auto &Ci = kv.second;
+        assert((ki < 0) || pi.is_zero());
+        m = m.add(Ci.mul_scalar(pow(x - pi, ki)));
     }
-    return ex_to<matrix>(m.evalm());
+    return m;
 }
 
 void
-pfmatrix::add(const matrix &C, const ex &pi, int ki)
+pfmatrix::add(const matrix &C, const ex &p1, int k1)
 {
-    matrix &R = (*this)(pi, ki);
+    // M += C*(x-p1)^k1
+    matrix &R = (*this)(p1, k1);
     R = R.add(C);
 }
 
 void
-pfmatrix::add_div(const matrix &C, const ex &pi, int ki, const ex &x0)
+pfmatrix::add_div(const matrix &C, const ex &p1, int k1, const ex &p2)
 {
-    if (pi == x0) {
-        add(C, pi, ki - 1);
+    if (p1 == p2) {
+        add(C, p1, k1 - 1);
     }
-    else if (ki >= 0) {
-        assert(pi == 0);
-        for (int k = 0; k < ki; k++) {
-            add(C.mul_scalar(pow(x0, ki - 1 - k)), pi, k);
+    else if (k1 >= 0) {
+        assert(p1 == 0);
+        for (int k = 0; k < k1; k++) {
+            add(C.mul_scalar(pow(p2, k1 - 1 - k)), p1, k);
         }
-        add(C.mul_scalar(pow(x0, ki)), x0, -1);
+        add(C.mul_scalar(pow(p2, k1)), p2, -1);
     }
     else {
-        ex dx = x0 - pi;
-        for (int k = ki; k < 0; k++) {
-            add(C.mul_scalar(-pow(dx, ki - 1 - k)), pi, k);
+        ex dx = p2 - p1;
+        for (int k = k1; k < 0; k++) {
+            add(C.mul_scalar(-pow(dx, k1 - 1 - k)), p1, k);
         }
-        add(C.mul_scalar(pow(dx, ki)), x0, -1);
+        add(C.mul_scalar(pow(dx, k1)), p2, -1);
     }
 }
 
 void
-pfmatrix::add_mul(const matrix &C, const ex &pi, int ki, const ex &x0)
+pfmatrix::add_mul(const matrix &C, const ex &p1, int k1, const ex &p2)
 {
-    add(C.mul_scalar(pi - x0), pi, ki);
-    if (ki == -1) {
-        add(C, 0, ki + 1);
+    // M += C*(x-p1)^k1*(x-p2) = C*(x-p1)^k1*{(x-p1) + (p1-p2)}
+    add(C.mul_scalar(p1 - p2), p1, k1);
+    if (k1 == -1) {
+        add(C, 0, 0);
     }
     else {
-        add(C, pi, ki + 1);
+        add(C, p1, k1 + 1);
     }
 }
 
@@ -443,6 +481,107 @@ pfmatrix::add_pow(const matrix &C, const ex &p1, int k1, const ex &p2, int k2)
     else {
         assert(false);
     }
+}
+
+pfmatrix
+pfmatrix::with_constant_t(const matrix &T) const
+{
+    return with_constant_t(T.inverse(), T);
+}
+
+pfmatrix
+pfmatrix::with_constant_t(const matrix &L, const matrix &R) const
+{
+    pfmatrix m(nrows, ncols);
+    for (auto &kv : residues) {
+        const auto &pi = kv.first.first;
+        const auto &ki = kv.first.second;
+        const auto &Ci = kv.second;
+        m(pi, ki) = L.mul(Ci).mul(R);
+    }
+    return m;
+}
+
+pfmatrix
+pfmatrix::with_balance_t(const matrix &P, const ex &x1, const ex &x2) const
+{
+    pfmatrix m(nrows, ncols);
+    const matrix coP = ex_to_matrix(unit_matrix(P.rows()) - P);
+    if (x1 == infinity) {
+        const matrix neg_coP = coP.mul_scalar(-1);
+        for (const auto &kv : residues) {
+            const auto &pi = kv.first.first;
+            const auto &ki = kv.first.second;
+            const auto &Ci = kv.second;
+            // coP Ci coP (x-pi)^ki + P Ci P (x-pi)^ki
+            m.add(coP.mul(Ci).mul(coP).add(P.mul(Ci).mul(P)), pi, ki);
+            // coP Ci P -(x-x2) (x-pi)^ki
+            m.add_mul(neg_coP.mul(Ci).mul(P), pi, ki, x2);
+            // P Ci coP -1/(x-x2) (x-pi)^ki
+            m.add_div(P.mul(Ci).mul(neg_coP), pi, ki, x2);
+        }
+        // -P/(x-x2)
+        m.add(P.mul_scalar(-1), x2, -1);
+    }
+    else if (x2 == infinity) {
+        const matrix neg_coP = coP.mul_scalar(-1);
+        for (const auto &kv : residues) {
+            const auto &pi = kv.first.first;
+            const auto &ki = kv.first.second;
+            const auto &Ci = kv.second;
+            // coP Ci coP (x-pi)^ki + P Ci P (x-pi)^ki
+            m.add(coP.mul(Ci).mul(coP).add(P.mul(Ci).mul(P)), pi, ki);
+            // P Ci coP -(x-x1) (x-pi)^ki
+            m.add_mul(P.mul(Ci).mul(neg_coP), pi, ki, x1);
+            // coP Ci P -1/(x-x1) (x-pi)^ki
+            m.add_div(neg_coP.mul(Ci).mul(P), pi, ki, x1);
+        }
+        // P/(x-x1)
+        m.add(P, x1, -1);
+    }
+    else {
+        // Ci (x-pi)^ki
+        m.residues = residues;
+        const matrix neg_P = P.mul_scalar(-1);
+        const matrix coP_x12 = coP.mul_scalar(x1-x2);
+        for (const auto &kv : residues) {
+            const auto &pi = kv.first.first;
+            const auto &ki = kv.first.second;
+            const auto &Ci = kv.second;
+            // coP Ci P (x1-x2)/(x-x1) (x-pi)^ki
+            m.add_div(coP_x12.mul(Ci).mul(P), pi, ki, x1);
+            // P Ci coP (x2-x1)/(x-x2) (x-pi)^ki
+            m.add_div(neg_P.mul(Ci).mul(coP_x12), pi, ki, x2);
+        }
+        // P/(x-x1) - P/(x-x2)
+        m.add(P, x1, -1);
+        m.add(neg_P, x2, -1);
+    }
+    // TODO: normalize and clean residues here maybe?
+    return m;
+}
+
+matrix
+balance_t(const matrix &m, const matrix &P, const ex &x1, const ex &x2, const ex &x)
+{
+    matrix coP = P.mul_scalar(-1);
+    for (unsigned i = 0; i < coP.cols(); i++) {
+        coP(i, i) += 1;
+    }
+    ex k, d;
+    if (x1 == infinity) {
+        k = -(x - x2);
+        d = -1;
+    }
+    else if (x2 == infinity) {
+        k = -1/(x - x1);
+        d = 1/pow(x - x1, 2);
+    }
+    else {
+        k = (x - x2)/(x - x1);
+        d = (x2 - x1)/pow(x - x1, 2);
+    }
+    return ex_to_matrix((coP + 1/k*P)*m*(coP + k*P) - d/k*P);
 }
 
 /* Block-triangular permutation of a matrix.
@@ -538,7 +677,7 @@ ex
 charpoly_by_blocks(const matrix &m, const ex &lambda)
 {
     block_triangular_permutation btp(m);
-    matrix mm = ex_to<matrix>((btp.t().transpose()*m*btp.t()).evalm());
+    matrix mm = btp.t().transpose().mul(m).mul(btp.t());
     ex cp = 1;
     int o = 0;
     for (int size : btp.block_size()) {
