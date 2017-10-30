@@ -176,11 +176,7 @@ TEST_CASE("pfmatrix add_*") {
         pfmatrix pfm(m, x);
         pfm.add_mul(c, pi, ki, x0);
         matrix mm2 = pfm.to_matrix(x);
-        for (unsigned i = 0; i < m.rows(); i++) {
-            for (unsigned j = 0; j < m.cols(); j++) {
-                REQUIRE(normal(mm1(i,j) - mm2(i,j)).is_zero());
-            }
-        }
+        REQUIRE(ratcan(mm1) == ratcan(mm2));
     };
     SECTION("add_mul, 1") { test_add_mul(c, 1, -2, -y*y); }
     SECTION("add_mul, 2") { test_add_mul(c, 1, -1, y/2); }
@@ -193,11 +189,7 @@ TEST_CASE("pfmatrix add_*") {
         pfmatrix pfm(m, x);
         pfm.add_div(c, pi, ki, x0);
         matrix mm2 = pfm.to_matrix(x);
-        for (unsigned i = 0; i < m.rows(); i++) {
-            for (unsigned j = 0; j < m.cols(); j++) {
-                REQUIRE(normal(mm1(i,j) - mm2(i,j)).is_zero());
-            }
-        }
+        REQUIRE(ratcan(mm1) == ratcan(mm2));
     };
     SECTION("add_div, 1") { test_add_div(c, 1, -2, -y*y); }
     SECTION("add_div, 2") { test_add_div(c, 1, -1, y/2); }
@@ -210,11 +202,7 @@ TEST_CASE("pfmatrix add_*") {
         pfmatrix pfm(m, x);
         pfm.add_pow(c, p1, k1, p2, k2);
         matrix mm2 = pfm.to_matrix(x);
-        for (unsigned i = 0; i < m.rows(); i++) {
-            for (unsigned j = 0; j < m.cols(); j++) {
-                REQUIRE(normal(mm1(i,j) - mm2(i,j)).is_zero());
-            }
-        }
+        REQUIRE(ratcan(mm1) == ratcan(mm2));
     };
     SECTION("add_pow, 1") { test_add_pow(c, 1, -2, 0, 2); }
     SECTION("add_pow, 2") { test_add_pow(c, 1, -1, 1, -1); }

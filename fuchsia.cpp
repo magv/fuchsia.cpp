@@ -140,6 +140,29 @@ poly_decompose(const ex &e, const ex &p, const symbol &x)
     return c;
 }
 
+/* Canonical form for rational expressions.
+ */
+ex
+ratcan(const ex &e)
+{
+    ex nd = numer_denom(e);
+    return nd.op(0).expand()/nd.op(1).expand();
+}
+
+/* Canonical form for matrices of rational expressions.
+ */
+matrix
+ratcan(const matrix &m)
+{
+    matrix r(m.cols(), m.rows());
+    for (unsigned i = 0; i < m.rows(); i++) {
+        for (unsigned j = 0; j < m.cols(); j++) {
+            r(i, j) = ratcan(m(i, j));
+        }
+    }
+    return r;
+}
+
 /* Iterate through factors of e, call yield(f, k) for each
  * factor of the form f^k.
  *
