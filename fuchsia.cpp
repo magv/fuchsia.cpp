@@ -98,29 +98,33 @@ eigenvectors_left(matrix m, ex eigenvalue)
 pair<ex, ex>
 poly_divmod(const ex &a, const ex &b, const symbol &x)
 {
-    ex aa = a.expand().collect(x);
-    ex bb = b.expand().collect(x);
+    ex bb = b.expand();
     int deg_b = bb.degree(x);
     if (deg_b == 0)
         return make_pair(a/b, ex(0));
-    ex b0 = normal(bb.coeff(x, deg_b));
+    ex aa = a.expand();
+    int deg_a = aa.degree(x);
+    if (deg_a < deg_b)
+        return make_pair(0, aa);
+    vector<ex> va(deg_a + 1);
+    vector<ex> vb(deg_b + 1);
+    for (int i = 0; i <= deg_a; i++) va[i] = aa.coeff(x, i);
+    for (int i = 0; i <= deg_b; i++) vb[i] = bb.coeff(x, i);
+    ex bn = normal(vb[deg_b]);
     ex q = 0;
-    for (;;) {
-        int deg_a = aa.degree(x);
-        if (deg_a < deg_b) {
-            return make_pair(q, aa);
-        }
-        ex a0 = aa.coeff(x, deg_a);
-        ex a0_b0 = normal(a0/b0);
-        if (a0_b0.is_zero()) {
-            // a0 is an un-normal zero; let's drop it from aa and try again.
-            aa -= a0*pow(x, deg_a);
-            continue;
-        }
-        ex k = a0_b0*pow(x, deg_a - deg_b);
-        aa = (aa - bb*k).expand().collect(x);
-        q += k;
+    for (int i = deg_a; i >= deg_b; i--) {
+        ex k = normal(va[i]/bn);
+        q += k*pow(x, i - deg_b);
+        // This zero assignment is only here to clean up the memory earlier.
+        va[i] = 0;
+        for (int j = 0; j < deg_b; j++)
+            va[j+i-deg_b] -= vb[j]*k;
     }
+    ex r = 0;
+    for (int i = 0; i < deg_b; i++) {
+        r += normal(va[i])*pow(x, i);
+    }
+    return make_pair(q, r);
 }
 
 /* Decompose polynomial over rationals e(x) into {c_i(x)},
