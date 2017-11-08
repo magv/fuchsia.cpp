@@ -1,8 +1,8 @@
 #include <ginac/ginac.h>
 #include <ginac/parser.h>
+#include <assert.h>
 #include <fstream>
 #include <tuple>
-#include <assert.h>
 
 using namespace GiNaC;
 using namespace std;
@@ -18,6 +18,8 @@ ex_to_matrix(const ex &m)
 struct infinity_s { infinity_s() {} };
 typedef structure<infinity_s> infinity_t;
 
+const ex infinity = infinity_t();
+
 template<> void
 infinity_t::print(const print_context & c, unsigned level) const
 {
@@ -25,8 +27,6 @@ infinity_t::print(const print_context & c, unsigned level) const
         inherited::print(c, level);
     c.s << "Infinity";
 }
-
-const ex infinity = infinity_t();
 
 /* Load matrix from a file in Mathematica format.
  */
@@ -67,7 +67,7 @@ save_matrix(const char *filename, const matrix &m)
 /* Find the set of right eigenvectors for a given eigenvalue.
  */
 vector<matrix>
-eigenvectors_right(matrix m, ex eigenvalue)
+eigenvectors_right(const matrix &m, const ex &eval)
 {
     unsigned n = m.cols();
     // Construct eigenvector of symbol temporaries.
@@ -78,12 +78,11 @@ eigenvectors_right(matrix m, ex eigenvalue)
         tmp.push_back(t);
         ev(i, 0) = t;
     }
-    // Construct mm = m - eigenvalue*I
-    matrix mm(n, n);
+    // Construct mm = m - eval*I
+    matrix mm = m;
     for (unsigned i = 0; i < n; i++) {
-        mm(i, i) = eigenvalue;
+        mm(i, i) -= eval;
     }
-    mm = m.sub(mm);
     // Solve mm*v = 0
     matrix rhs(n, 1);
     matrix s = mm.solve(ev, rhs);
@@ -106,9 +105,9 @@ eigenvectors_right(matrix m, ex eigenvalue)
 /* Find the set of left eigenvectors for a given eigenvalue.
  */
 vector<matrix>
-eigenvectors_left(matrix m, ex eigenvalue)
+eigenvectors_left(const matrix &m, const ex &eval)
 {
-    auto v = eigenvectors_right(m.transpose(), eigenvalue);
+    auto v = eigenvectors_right(m.transpose(), eval);
     for (auto &e : v) e = e.transpose();
     return v;
 }
@@ -423,6 +422,7 @@ pfmatrix::add(const matrix &C, const ex &p1, int k1)
 void
 pfmatrix::add_div(const matrix &C, const ex &p1, int k1, const ex &p2)
 {
+    // M += C*(x-p1)/(x-p2)
     if (p1 == p2) {
         add(C, p1, k1 - 1);
     }
@@ -582,6 +582,9 @@ pfmatrix::with_balance_t(const matrix &P, const ex &x1, const ex &x2) const
     return m;
 }
 
+/* Apply a balance with projector P between x=x1 and x=x2 to a
+ * given matrix m.
+ */
 matrix
 balance_t(const matrix &m, const matrix &P, const ex &x1, const ex &x2, const ex &x)
 {
