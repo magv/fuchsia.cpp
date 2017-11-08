@@ -214,6 +214,20 @@ factor_iter(const ex &e, F yield)
     }
 }
 
+/* Iterate through terms of e, call yield(t) for each one.
+ */
+template <typename F> void
+term_iter(const ex &e, F yield)
+{
+    if (is_a<add>(e)) {
+        for (const auto &t : e) {
+            yield(t);
+        }
+    } else {
+        yield(e);
+    }
+}
+
 /* Iterate through terms of a partial fraction decomposition
  * of a rational expression in x. Call yield(p, q, k) for
  * each p*q^k term.
@@ -344,22 +358,29 @@ pfmatrix::pfmatrix(const matrix &m, const symbol &x)
 {
     for (unsigned i = 0; i < nrows; i++) {
         for (unsigned j = 0; j < ncols; j++) {
-            partial_fraction_iter(m(i, j), x,
-                [&](const auto &p, const auto &q, int k) {
-                    int deg = q.degree(x);
-                    if (k >= 0) {
-                        // q == x
-                        (*this)(0, k)(i, j) = p;
-                    }
-                    else if (deg == 1) {
-                        // q == c0 + c1*x
-                        ex c0 = q.coeff(x, 0);
-                        ex c1 = q.coeff(x, 1);
-                        (*this)(normal(-c0/c1), k)(i, j) = p*pow(c1, k);
-                    }
-                    else {
-                        throw runtime_error("pfmatrix(): can't solve equations of 2nd degree or higher");
-                    }
+            // Caveat emptor! This algorithm may place
+            // (non-canonical) zero cells into Ci values,
+            // and possible whole zero Ci matrices (canonical
+            // and/or not) into this->residues.
+            term_iter(m(i, j),
+                [&](const ex &t) {
+                    partial_fraction_iter(t, x,
+                        [&](const auto &p, const auto &q, int k) {
+                            int deg = q.degree(x);
+                            if (k >= 0) {
+                                // q == x
+                                (*this)(0, k)(i, j) += p;
+                            }
+                            else if (deg == 1) {
+                                // q == c0 + c1*x
+                                ex c0 = q.coeff(x, 0);
+                                ex c1 = q.coeff(x, 1);
+                                (*this)(ratcan(-c0/c1), k)(i, j) += p*pow(c1, k);
+                            }
+                            else {
+                                throw runtime_error("pfmatrix(): can't solve equations of 2nd degree or higher");
+                            }
+                        });
                 });
         }
     }
