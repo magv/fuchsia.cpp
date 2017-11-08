@@ -752,3 +752,260 @@ eigenvalues(const matrix &m)
         });
     return eigenvalues;
 }
+
+/* Since matrix::fraction_free_elimination and other useful
+ * members are protected, we need to eploy this hack to access
+ * them.
+ */
+class matrix_hack : public matrix {
+    public:
+    void echelon_form();
+    void append_rows(const matrix &src);
+};
+
+void
+matrix_hack::echelon_form()
+{
+    if (row <= 2) {
+        division_free_elimination(false);
+    } else {
+        fraction_free_elimination(false);
+    }
+    while (row > 0) {
+        for (unsigned i = 0; i < col; i++) {
+            if (!m[(row - 1)*col + i].is_zero()) goto done;
+        }
+        row--;
+    }
+done:;
+    m.resize(row*col);
+}
+
+void
+matrix_hack::append_rows(const matrix &src)
+{
+    assert(col == src.cols());
+    row += src.rows();
+    m.insert(m.end(), ((const matrix_hack*)&src)->m.begin(), ((const matrix_hack*)&src)->m.end());
+}
+
+/* Multiply a submatrix by the LCM of all of its denominators.
+ * Divide it by the GCD of all of its numerators.
+ */
+void
+rescale_submatrix(matrix &m, unsigned r, unsigned nr, unsigned c, unsigned nc)
+{
+    vector<ex> n(nr*nc), d(nr*nc);
+    ex mul = 0;
+    ex div = 0;
+    auto it_n = n.begin();
+    auto it_d = d.begin();
+    for (unsigned i = r; i < r + nr; i++) {
+        for (unsigned j = c; j < c + nc; j++) {
+            ex nd = m(i, j).numer_denom();
+            ex numer = nd.op(0);
+            ex denom = nd.op(1);
+            *it_n++ = numer;
+            *it_d++ = denom;
+            div = div.is_zero() ? numer : gcd(div, numer);
+            mul = mul.is_zero() ? denom : lcm(mul, denom);
+        }
+    }
+    if (div.is_zero()) return;
+    if (mul.is_zero()) return;
+    it_n = n.begin();
+    it_d = d.begin();
+    for (unsigned i = r; i < r + nr; i++) {
+        for (unsigned j = c; j < c + nc; j++) {
+            ex nn, dd;
+            bool ok1 = divide(*it_n++, div, nn);
+            bool ok2 = divide(mul, *it_d++, dd);
+            assert(ok1 && ok2);
+            m(i, j) = nn*dd;
+        }
+    }
+}
+
+/* A vector (sub-)space represented by a set of basis vectors.
+ */
+struct vspace {
+    matrix basis;
+    vspace(unsigned n);
+    vspace(const matrix &b);
+    unsigned dim() const;
+    matrix basis_column(unsigned i) const;
+    matrix basis_row(unsigned i) const;
+    bool contains(const matrix &v) const;
+    void add(const matrix &v);
+    void normalize();
+};
+
+vspace::vspace(unsigned n)
+    : basis(0, n)
+{
+}
+
+vspace::vspace(const matrix &b)
+    : basis(b)
+{
+    for (unsigned i = 0; i < basis.rows(); i++) {
+        rescale_submatrix(basis, i, 1, 0, basis.cols());
+    }
+    normalize();
+}
+
+void
+vspace::add(const matrix &v)
+{
+    ((matrix_hack*)&basis)->append_rows(v);
+}
+
+void
+vspace::normalize()
+{
+    ((matrix_hack*)&basis)->echelon_form();
+    for (unsigned i = 0; i < basis.rows(); i++) {
+        rescale_submatrix(basis, i, 1, 0, basis.cols());
+    }
+}
+
+unsigned
+vspace::dim() const
+{
+    return basis.rows();
+}
+
+matrix
+vspace::basis_row(unsigned i) const
+{
+    matrix v(basis.cols(), 1);
+    for (unsigned j = 0; j < basis.cols(); j++) {
+        v.let_op(j) = basis(i, j);
+    }
+    return v;
+}
+
+matrix
+vspace::basis_column(unsigned i) const
+{
+    matrix v(1, basis.cols());
+    for (unsigned j = 0; j < basis.cols(); j++) {
+        v.let_op(j) = basis(i, j);
+    }
+    return v;
+}
+
+bool
+vspace::contains(const matrix &v) const
+{
+    assert(v.nops() == basis.cols());
+    matrix vv = v;
+    unsigned p = 0;
+    // Division-free subtraction of basis vectors from v.
+    for (unsigned i = 0; i < basis.rows(); i++, p++) {
+        // TODO: expand vv.op(p) maybe?
+        for (;;) {
+            if (!basis(i, p).is_zero()) break;
+            if (!vv.op(p).is_zero())
+                return false;
+            p++;
+        }
+        const ex &vv_p = vv.op(p);
+        if (!vv_p.is_zero()) {
+            const ex b_ip = basis(i, p);
+            vv.let_op(p) = 0;
+            for (unsigned j = p + 1; j < basis.cols(); j++) {
+                vv.let_op(j) = vv.op(j)*b_ip - basis(i, j)*vv_p;
+            }
+        }
+    }
+    for (unsigned i = p; i < basis.cols(); i++) {
+        if (!vv.op(i).is_zero())
+            return false;
+    }
+    return true;
+}
+
+/* Find the null space (a.k.a. the kernel) of a given matrix.
+ */
+vspace
+nullspace(const matrix &m)
+{
+    unsigned nrows = m.rows();
+    unsigned ncols = m.cols();
+    matrix v(ncols, 1);
+    std::vector<symbol> tmp;
+    for (unsigned i = 0; i < ncols; i++) {
+        symbol t;
+        v(i, 0) = t;
+        tmp.push_back(t);
+    }
+    // Solve M*V = 0
+    matrix zero(nrows, 1);
+    matrix s = m.solve(v, zero);
+    matrix coeff(ncols, ncols);
+    for (unsigned k = 0; k < ncols; k++) {
+        for (unsigned i = 0; i < ncols; i++) {
+            coeff(k, i) = s(i, 0).coeff(tmp[k]);
+        }
+    }
+    return vspace(coeff);
+}
+
+/* Compute the Jordan normal form J of a given matrix M.
+ * Return a transformation matrix Q, such that Q^-1 M Q = J.
+ */
+matrix
+jordan(const matrix &m)
+{
+    unsigned n = m.rows();
+    map<ex, unsigned, ex_is_less> eval2almul;
+    for (const auto eval : eigenvalues(m)) {
+        eval2almul[ratcan(eval)] += 1;
+    }
+    matrix q(n, n);
+    int idxq = 0;
+    for (const auto &kv : eval2almul) {
+        const auto &eval = kv.first;
+        const auto &almul = kv.second;
+        matrix mm = m;
+        for (unsigned i = 0; i < n; i++) {
+            mm(i, i) -= eval;
+        }
+        vector<vspace> nspace;
+        vector<vspace> xspace;
+        matrix mmk = mm;
+        for (;;) {
+            auto ns = nullspace(mmk);
+            nspace.push_back(ns);
+            xspace.push_back(vspace(n));
+            if (ns.dim() == almul) break;
+            mmk = mmk.mul(mm);
+        }
+        int kk = 0;
+        for (int i = nspace.size() - 1; i >= 0; i--) {
+            xspace[i].normalize();
+            int kt = (i == 0) ?
+                nspace[i].dim() : nspace[i].dim() - nspace[i-1].dim();
+            for (int k = nspace[i].dim() - 1; kk < kt; k--) {
+                auto v = nspace[i].basis_row(k);
+                if ((i > 0) && nspace[i-1].contains(v)) continue;
+                if (xspace[i].contains(v)) continue;
+                for (unsigned r = 0; r < n; r++) {
+                    q(r, idxq + i) = v.op(r);
+                }
+                kk++;
+                for (int j = i - 1; j >= 0; j--) {
+                    v = mm.mul(v);
+                    xspace[j].add(v.transpose());
+                    for (unsigned r = 0; r < n; r++) {
+                        q(r, idxq + j) = v.op(r);
+                    }
+                }
+                rescale_submatrix(q, 0, n, idxq, i+1);
+                idxq += i + 1;
+            }
+        }
+    }
+    return q;
+}
