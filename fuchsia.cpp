@@ -179,7 +179,7 @@ ratcan(const ex &e)
 matrix
 ratcan(const matrix &m)
 {
-    matrix r(m.cols(), m.rows());
+    matrix r(m.rows(), m.cols());
     for (unsigned i = 0; i < m.rows(); i++) {
         for (unsigned j = 0; j < m.cols(); j++) {
             r(i, j) = ratcan(m(i, j));
