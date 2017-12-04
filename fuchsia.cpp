@@ -962,10 +962,12 @@ struct vspace {
     vspace(unsigned n);
     vspace(const matrix &b);
     unsigned dim() const;
-    matrix basis_column(unsigned i) const;
+    matrix basis_col(unsigned i) const;
     matrix basis_row(unsigned i) const;
+    const matrix basis_cols() const;
+    const matrix &basis_rows() const;
     bool contains(const matrix &v) const;
-    void add(const matrix &v);
+    void add_rows(const matrix &v);
     void normalize();
 };
 
@@ -984,7 +986,7 @@ vspace::vspace(const matrix &b)
 }
 
 void
-vspace::add(const matrix &v)
+vspace::add_rows(const matrix &v)
 {
     ((matrix_hack*)&basis)->append_rows(v);
 }
@@ -1005,7 +1007,7 @@ vspace::dim() const
 }
 
 matrix
-vspace::basis_row(unsigned i) const
+vspace::basis_col(unsigned i) const
 {
     matrix v(basis.cols(), 1);
     for (unsigned j = 0; j < basis.cols(); j++) {
@@ -1015,13 +1017,25 @@ vspace::basis_row(unsigned i) const
 }
 
 matrix
-vspace::basis_column(unsigned i) const
+vspace::basis_row(unsigned i) const
 {
     matrix v(1, basis.cols());
     for (unsigned j = 0; j < basis.cols(); j++) {
         v.let_op(j) = basis(i, j);
     }
     return v;
+}
+
+const matrix &
+vspace::basis_rows() const
+{
+    return basis;
+}
+
+const matrix
+vspace::basis_cols() const
+{
+    return basis.transpose();
 }
 
 bool
