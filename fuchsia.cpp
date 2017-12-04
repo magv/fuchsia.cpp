@@ -164,15 +164,13 @@ infinity_t::print(const print_context & c, unsigned level) const
     c.s << "Infinity";
 }
 
-/* Load matrix from a file in Mathematica format.
+/* Load matrix from a stream in Mathematica format.
  */
 pair<matrix, symtab>
-load_matrix(const char *filename, const symtab &table)
+load_matrix(istream &i, const symtab &table)
 {
     parser reader(table);
-    ifstream i(filename);
     ex x = reader(i);
-    i.close();
     // TODO: check that the input is indeed a matrix of rational
     // expressions, with no imaginary or irrational numbers; signal
     // errors if this is not the case.
@@ -180,12 +178,20 @@ load_matrix(const char *filename, const symtab &table)
     return make_pair(m, reader.get_syms());
 }
 
-/* Save matrix to a file in Mathematica format.
+/* Load matrix from a file in Mathematica format.
+ */
+pair<matrix, symtab>
+load_matrix(const char *filename, const symtab &table)
+{
+    ifstream i(filename);
+    return load_matrix(i, table);
+}
+
+/* Write matrix to a stream object in Mathematica format.
  */
 void
-save_matrix(const char *filename, const matrix &m)
+save_matrix(ostream &f, const matrix &m)
 {
-    ofstream f(filename);
     f << "{";
     for (unsigned i = 0; i < m.rows(); i++) {
         if (i != 0) f << ",\n";
@@ -197,7 +203,15 @@ save_matrix(const char *filename, const matrix &m)
         f << "}";
     }
     f << "}";
-    f.close();
+}
+
+/* Save matrix to a file in Mathematica format.
+ */
+void
+save_matrix(const char *filename, const matrix &m)
+{
+    ofstream f(filename);
+    save_matrix(f, m);
 }
 
 /* Divide one polynomial in x by another, return the quotient
