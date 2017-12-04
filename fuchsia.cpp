@@ -423,11 +423,12 @@ struct pfmatrix {
     map<key, matrix, key_is_less> residues;
     unsigned nrows;
     unsigned ncols;
+    symbol x;
 
-    pfmatrix(unsigned nrows, unsigned ncols);
+    pfmatrix(unsigned nrows, unsigned ncols, const symbol &x);
     pfmatrix(const matrix &m, const symbol &x);
     matrix &operator ()(const ex &p, int k);
-    matrix to_matrix(const ex &x);
+    matrix to_matrix();
     // M += C*(x-pi)^ki
     void add(const matrix &C, const ex &p1, int k1);
     // M += C*(x-pi)^ki/(x-p2)
@@ -440,7 +441,7 @@ struct pfmatrix {
     pfmatrix with_constant_t(const matrix &T) const;
     // M' = L M R
     pfmatrix with_constant_t(const matrix &L, const matrix &R) const;
-    pfmatrix with_balance_t(const matrix &P, const ex &x1, const ex &p2) const;
+    pfmatrix with_balance_t(const matrix &P, const ex &x1, const ex &x2) const;
 };
 
 bool
@@ -449,13 +450,12 @@ pfmatrix::key_is_less::operator ()(const key &k1, const key &k2) const
     return (k1.second < k2.second) || ex_is_less()(k1.first, k2.first);
 }
 
-pfmatrix::pfmatrix(unsigned nrows, unsigned ncols)
-    : nrows(nrows), ncols(ncols)
-{
-}
+pfmatrix::pfmatrix(unsigned nrows, unsigned ncols, const symbol &x)
+    : nrows(nrows), ncols(ncols), x(x)
+{ }
 
 pfmatrix::pfmatrix(const matrix &m, const symbol &x)
-    : nrows(m.rows()), ncols(m.cols())
+    : nrows(m.rows()), ncols(m.cols()), x(x)
 {
     for (unsigned i = 0; i < nrows; i++) {
         for (unsigned j = 0; j < ncols; j++) {
@@ -499,7 +499,7 @@ pfmatrix::operator ()(const ex &p, int k)
 }
 
 matrix
-pfmatrix::to_matrix(const ex &x)
+pfmatrix::to_matrix()
 {
     matrix m(nrows, ncols);
     for (const auto &kv : residues) {
@@ -614,7 +614,7 @@ pfmatrix::with_constant_t(const matrix &T) const
 pfmatrix
 pfmatrix::with_constant_t(const matrix &L, const matrix &R) const
 {
-    pfmatrix m(nrows, ncols);
+    pfmatrix m(nrows, ncols, x);
     for (auto &kv : residues) {
         const auto &pi = kv.first.first;
         const auto &ki = kv.first.second;
@@ -627,7 +627,7 @@ pfmatrix::with_constant_t(const matrix &L, const matrix &R) const
 pfmatrix
 pfmatrix::with_balance_t(const matrix &P, const ex &x1, const ex &x2) const
 {
-    pfmatrix m(nrows, ncols);
+    pfmatrix m(nrows, ncols, x);
     const matrix coP = ex_to_matrix(unit_matrix(P.rows()) - P);
     if (x1 == infinity) {
         const matrix neg_coP = coP.mul_scalar(-1);

@@ -11,7 +11,7 @@ main(int argc, char *argv[])
     chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
     symbol x = ex_to<symbol>(s["x"]);
     pfmatrix pfm(m, x);
-    matrix pfm_mm = pfm.to_matrix(x);
+    matrix pfm_mm = pfm.to_matrix();
     for (unsigned i = 0; i < m.rows(); i++) {
         for (unsigned j = 0; j < m.cols(); j++) {
             assert(normal(m(i,j) - pfm_mm(i,j)).is_zero());
