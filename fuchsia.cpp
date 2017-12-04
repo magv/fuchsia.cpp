@@ -442,6 +442,7 @@ struct pfmatrix {
     pfmatrix(const matrix &m, const symbol &x);
     matrix &operator ()(const ex &p, int k);
     matrix to_matrix();
+    void normalize();
     // M += C*(x-pi)^ki
     void add(const matrix &C, const ex &p1, int k1);
     // M += C*(x-pi)^ki/(x-p2)
@@ -523,6 +524,20 @@ pfmatrix::to_matrix()
         m = m.add(Ci.mul_scalar(pow(x - pi, ki)));
     }
     return m;
+}
+
+void
+pfmatrix::normalize()
+{
+    for (auto it = residues.begin(); it != residues.end();) {
+        auto &ci = it->second;
+        ci = normal(ci);
+        if (ci.is_zero_matrix()) {
+            it = residues.erase(it);
+        } else {
+            it++;
+        }
+    }
 }
 
 void
@@ -692,7 +707,7 @@ pfmatrix::with_balance_t(const matrix &P, const ex &x1, const ex &x2) const
         m.add(P, x1, -1);
         m.add(neg_P, x2, -1);
     }
-    // TODO: normalize and clean residues here maybe?
+    m.normalize();
     return m;
 }
 
