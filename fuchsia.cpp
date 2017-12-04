@@ -200,54 +200,6 @@ save_matrix(const char *filename, const matrix &m)
     f.close();
 }
 
-/* Find the set of right eigenvectors for a given eigenvalue.
- */
-vector<matrix>
-eigenvectors_right(const matrix &m, const ex &eval)
-{
-    unsigned n = m.cols();
-    // Construct eigenvector of symbol temporaries.
-    std::vector<symbol> tmp;
-    matrix ev(n, 1);
-    for (unsigned i = 0; i < n; i++) {
-        symbol t;
-        tmp.push_back(t);
-        ev(i, 0) = t;
-    }
-    // Construct mm = m - eval*I
-    matrix mm = m;
-    for (unsigned i = 0; i < n; i++) {
-        mm(i, i) -= eval;
-    }
-    // Solve mm*v = 0
-    matrix rhs(n, 1);
-    matrix s = mm.solve(ev, rhs);
-    // Find eigenvectors
-    vector<matrix> evectors;
-    for (unsigned k = 0; k < n; k++) {
-        matrix ev(n, 1);
-        for (unsigned i = 0; i < n; i++) {
-            ev(i, 0) = normal(s(i, 0).coeff(tmp[k]));
-        }
-        // is_zero_matrix() is only sufficient here because
-        // of the normal() call above.
-        if (not ev.is_zero_matrix()) {
-            evectors.push_back(ev);
-        }
-    }
-    return evectors;
-}
-
-/* Find the set of left eigenvectors for a given eigenvalue.
- */
-vector<matrix>
-eigenvectors_left(const matrix &m, const ex &eval)
-{
-    auto v = eigenvectors_right(m.transpose(), eval);
-    for (auto &e : v) e = e.transpose();
-    return v;
-}
-
 /* Divide one polynomial in x by another, return the quotient
  * and the remainder.
  */
@@ -1085,6 +1037,52 @@ nullspace(const matrix &m)
         }
     }
     return vspace(coeff);
+}
+
+/* Find the (right) eigenspace corresponding to a given eigenvalue.
+ */
+vspace
+eigenspace(const matrix &m, const ex &eval)
+{
+    matrix mm = m;
+    for (unsigned i = 0; i < m.rows(); i++) {
+        mm(i, i) -= eval;
+    }
+    return nullspace(mm);
+}
+
+/* Find the left eigenspace corresponding to a given eigenvalue.
+ */
+vspace
+eigenspace_left(const matrix &m, const ex &eval)
+{
+    return eigenspace(m.transpose(), eval);
+}
+
+/* Find the set of right eigenvectors for a given eigenvalue.
+ */
+vector<matrix>
+eigenvectors_right(const matrix &m, const ex &eval)
+{
+    vspace es = eigenspace(m, eval);
+    vector<matrix> evectors(es.dim());
+    for (unsigned i = 0; i < es.dim(); i++) {
+        evectors[i] = es.basis_col(i);
+    }
+    return evectors;
+}
+
+/* Find the set of left eigenvectors for a given eigenvalue.
+ */
+vector<matrix>
+eigenvectors_left(const matrix &m, const ex &eval)
+{
+    vspace es = eigenspace_left(m, eval);
+    vector<matrix> evectors(es.dim());
+    for (unsigned i = 0; i < es.dim(); i++) {
+        evectors[i] = es.basis_row(i);
+    }
+    return evectors;
 }
 
 /* Compute the Jordan normal form J of a given matrix M.
