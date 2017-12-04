@@ -1,11 +1,147 @@
 #include <ginac/ginac.h>
 #include <ginac/parser.h>
 #include <assert.h>
+#include <chrono>
 #include <fstream>
 #include <tuple>
 
 using namespace GiNaC;
 using namespace std;
+
+/* LOGGING
+ * ============================================================
+ *
+ * As with everything in C++, you can "optimize" this piece of
+ * code to e.g. use compile-only format string parsing, minimize
+ * number of created functions, and so on, but at the expense
+ * of kilolines of code, and your own sanity lost in the fight
+ * versus byzantine template rules. Please don't.
+ */
+
+bool log_verbose = false;
+
+static auto _log_starttime = chrono::steady_clock::now();
+static auto _log_lasttime = chrono::steady_clock::now();
+static int _log_depth = 0;
+
+const char*
+log_adv(const char *fmt)
+{
+    for (int i = 0; ; i++) {
+        if (fmt[i] == '{') {
+            cout.write(fmt, i);
+            return fmt + i + 2;
+        }
+        if (fmt[i] == 0) {
+            cout.write(fmt, i);
+            return fmt + i;
+        }
+    }
+}
+
+/* This function is used to print objects into the log. Override it
+ * for the data types you care about to modify their appearance.
+ */
+template<typename T> static inline void
+log_format(ostream &o, const T &value)
+{
+    o << value;
+}
+
+void
+log_print_start(const char *lvl)
+{
+    auto t = chrono::steady_clock::now();
+    auto dt = chrono::duration_cast<chrono::duration<double>>(t - _log_starttime).count();
+    cout << "\033[32m[" << lvl << " " << std::fixed << std::setprecision(3) << dt << "s +";
+    cout << chrono::duration_cast<chrono::duration<double>>(t - _log_lasttime).count() << "s";
+    for (int i = 0; i < _log_depth; i++) {
+        cout << " *";
+    }
+    cout << "]\033[0m ";
+    _log_lasttime = t;
+}
+
+template<typename T> const char *
+log_print_one(const char *fmt, const T &value)
+{
+    fmt = log_adv(fmt);
+    log_format(cout, value);
+    return fmt;
+}
+
+void
+log_print_end(const char *fmt)
+{
+    cout << fmt << endl;
+}
+
+struct _sequencehack {
+    template<typename ...Args>
+    _sequencehack(Args &&...) {}
+};
+
+template<typename ...Args> static void
+log_fmt(const char *lvl, const char *fmt, const Args &...args)
+{
+    log_print_start(lvl);
+    (void) _sequencehack {
+        (fmt = log_print_one(fmt, args), 0)
+        ...
+    };
+    log_print_end(fmt);
+}
+
+/* Log an debug message. These can be suppressed by setting
+ * log_verbose to false.
+ */
+template<typename... Args> static inline void
+logd(const char *fmt, const Args &...args)
+{
+    if (log_verbose) {
+        log_fmt("dbg", fmt, args...);
+    }
+}
+
+/* Log an information message.
+ */
+template<typename... Args> static inline void
+logi(const char *fmt, const Args &...args)
+{
+    log_fmt("inf", fmt, args...);
+}
+
+/* Log an error message.
+ */
+template<typename... Args> static inline void
+loge(const char *fmt, const Args &...args)
+{
+    log_fmt("err", fmt, args...);
+}
+
+template<typename F>
+struct _scopeexithack {
+    _scopeexithack(F f) : f(f) {}
+    ~_scopeexithack() { f(); }
+    F f;
+};
+
+/* Place this macro as the start of a function, and you'll get
+ * log entries every time this function is entered and exited.
+ *
+ * As a general rule, if you're adding logging statements to a
+ * function, add LOGME to its start as well.
+ */
+#define LOGME \
+    const auto &__log_func = __func__; \
+    logd("> {}()", __log_func); \
+    _log_depth++; \
+    auto __log_f = [&]{_log_depth--;logd("< {}()",__log_func);}; \
+    auto __log_s = _scopeexithack<decltype(__log_f)>(__log_f);
+
+/* Miscellaneous general utilities
+ * ============================================================
+ */
 
 matrix
 ex_to_matrix(const ex &m)
