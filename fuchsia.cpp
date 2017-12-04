@@ -281,10 +281,23 @@ matrix
 ratcan(const matrix &m)
 {
     matrix r(m.rows(), m.cols());
-    for (unsigned i = 0; i < m.rows(); i++) {
-        for (unsigned j = 0; j < m.cols(); j++) {
-            r(i, j) = ratcan(m(i, j));
-        }
+    for (unsigned i = 0; i < m.nops(); i++) {
+        r.let_op(i) = ratcan(m.op(i));
+    }
+    return r;
+}
+
+/* Normal form for matrices of rational expressions.
+ *
+ * This is similar to 'ratcan', but doesn't expand numerator and
+ * denominator needlessly.
+ */
+matrix
+normal(const matrix &m)
+{
+    matrix r(m.rows(), m.cols());
+    for (unsigned i = 0; i < m.nops(); i++) {
+        r.let_op(i) = normal(m.op(i));
     }
     return r;
 }
