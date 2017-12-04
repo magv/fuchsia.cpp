@@ -524,13 +524,12 @@ pfmatrix::pfmatrix(const matrix &m, const symbol &x)
 matrix &
 pfmatrix::operator ()(const ex &p, int k)
 {
-    auto key = make_pair(p, k);
-    decltype(residues)::iterator it;
-    tie(it, ignore) = residues.emplace(
-            piecewise_construct,
-            make_tuple(key),
-            std::make_tuple(nrows, ncols));
-    return (*it).second;
+    const auto key = make_pair(p, k);
+    auto it = residues.find(key);
+    if (it != residues.end()) {
+        return it->second;
+    }
+    return residues.insert(make_pair(key, matrix(nrows, ncols))).first->second;
 }
 
 matrix
