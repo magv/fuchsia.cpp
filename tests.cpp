@@ -305,3 +305,23 @@ TEST_CASE("jordan") {
         }
     }
 }
+
+TEST_CASE("jordan 2") {
+    symbol x("x");
+    matrix m = {
+        {0,0,0,0,0,0},
+        {0,0,0,0,0,0},
+        {0,0,0,0,0,0},
+        {0,0,0,0,0,0},
+        {0,-18*x*x*x+15*x*x-3*x,0,0,0,0},
+        {0,-12*x*x*x+10*x*x-2*x,0,0,0,0},
+    };
+    auto qcs = jordan(m);
+    auto q = qcs.first;
+    auto cs = qcs.second;
+    for (auto n : cs) {
+        cout << n << endl;
+        REQUIRE(n > 0);
+    }
+    REQUIRE(q.rank() == m.rows());
+}

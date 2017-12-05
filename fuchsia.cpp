@@ -1180,10 +1180,14 @@ jordan(const matrix &m)
                 auto v = nspace[i].basis_col(k);
                 if ((i != 0) && nspace[i-1].contains(v)) continue;
                 if (xspace[i].contains(v)) continue;
+                kk++;
+                if (kk < kt) {
+                    xspace[i].add_rows(v.transpose());
+                    xspace[i].normalize();
+                }
                 for (unsigned r = 0; r < n; r++) {
                     q(r, idxq + i) = v.op(r);
                 }
-                kk++;
                 for (int j = i - 1; j >= 0; j--) {
                     v = mm.mul(v);
                     xspace[j].add_rows(v.transpose());
