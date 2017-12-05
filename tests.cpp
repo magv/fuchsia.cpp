@@ -324,3 +324,18 @@ TEST_CASE("jordan 2") {
     }
     REQUIRE(q.rank() == m.rows());
 }
+
+TEST_CASE("vspace contains") {
+    symbol x("x"), y("y"), z("z"), a("a"), c("c");
+    vspace vs1(matrix({{-(x-z)*(c*z-3*c)*(-2+z),-a*(x-z)*c,-(x-z)*(-2+z)*c,y*(-2+z)*c,0,-(x-z)*(-5+z*z-4*z)*(-2+z)}}));
+    vspace vs2(matrix({{(x-z)*(-3+z)*(-2+z)*c,a*(x-z)*c,(x-z)*(-2+z)*c,-y*(-2+z)*c,0,(x-z)*(-5+z*z-4*z)*(-2+z)}}));
+    REQUIRE(vs1.dim() == vs2.dim());
+    for (unsigned i = 0; i < vs1.dim(); i++) {
+        auto v1 = vs1.basis_row(i);
+        auto v2 = vs2.basis_row(i);
+        REQUIRE(vs1.contains(v1));
+        REQUIRE(vs1.contains(v2));
+        REQUIRE(vs2.contains(v1));
+        REQUIRE(vs2.contains(v2));
+    }
+}

@@ -1045,9 +1045,9 @@ vspace::contains(const matrix &v) const
     unsigned p = 0;
     // Division-free subtraction of basis vectors from v.
     for (unsigned i = 0; i < basis.rows(); i++, p++) {
-        // TODO: expand vv.op(p) maybe?
         for (;;) {
             if (!basis(i, p).is_zero()) break;
+            vv.let_op(p) = expand(vv.op(p));
             if (!vv.op(p).is_zero())
                 return false;
             p++;
@@ -1062,6 +1062,7 @@ vspace::contains(const matrix &v) const
         }
     }
     for (unsigned i = p; i < basis.cols(); i++) {
+        vv.let_op(i) = expand(vv.op(i));
         if (!vv.op(i).is_zero())
             return false;
     }
