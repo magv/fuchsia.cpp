@@ -856,10 +856,10 @@ factor_twice_and_iter(const ex &e, F yield)
 /* Find and return eigenvalues of a matrix.
  * Throw an error, if unable.
  */
-vector<ex>
+map<ex, unsigned, ex_is_less>
 eigenvalues(const matrix &m)
 {
-    vector<ex> eigenvalues;
+    map<ex, unsigned, ex_is_less> eigenvalues;
     symbol lambda("λ");
     ex charpoly = charpoly_by_blocks(m, lambda);
     factor_iter(factor(charpoly),
@@ -872,8 +872,7 @@ eigenvalues(const matrix &m)
                 // f == c0 + c1*λ
                 ex c0 = f.coeff(lambda, 0);
                 ex c1 = f.coeff(lambda, 1);
-                for (int i = 0; i < k; i++)
-                    eigenvalues.push_back(normal(-c0/c1));
+                eigenvalues[ratcan(-c0/c1)] += k;
             }
             else {
                 throw runtime_error("eigenvalues(): can't solve equations of 2nd degree or higher");
@@ -1143,16 +1142,16 @@ eigenvectors_left(const matrix &m, const ex &eval)
 
 /* Compute the Jordan normal form J of a given matrix M.
  * Return a transformation matrix Q, such that Q^-1 M Q = J.
+ * Also return a list of Jordan cell sizes.
  */
-matrix
+pair<matrix, vector<int>>
 jordan(const matrix &m)
 {
+    assert(m.cols() == m.rows());
     unsigned n = m.rows();
-    map<ex, unsigned, ex_is_less> eval2almul;
-    for (const auto eval : eigenvalues(m)) {
-        eval2almul[ratcan(eval)] += 1;
-    }
+    map<ex, unsigned, ex_is_less> eval2almul = eigenvalues(m);
     matrix q(n, n);
+    vector<int> jcs, jce;
     int idxq = 0;
     for (const auto &kv : eval2almul) {
         const auto &eval = kv.first;
@@ -1177,8 +1176,9 @@ jordan(const matrix &m)
             int kt = (i == 0) ?
                 nspace[i].dim() : nspace[i].dim() - nspace[i-1].dim();
             for (int k = nspace[i].dim() - 1; kk < kt; k--) {
-                auto v = nspace[i].basis_row(k);
-                if ((i > 0) && nspace[i-1].contains(v)) continue;
+                assert(k >= 0);
+                auto v = nspace[i].basis_col(k);
+                if ((i != 0) && nspace[i-1].contains(v)) continue;
                 if (xspace[i].contains(v)) continue;
                 for (unsigned r = 0; r < n; r++) {
                     q(r, idxq + i) = v.op(r);
@@ -1186,15 +1186,22 @@ jordan(const matrix &m)
                 kk++;
                 for (int j = i - 1; j >= 0; j--) {
                     v = mm.mul(v);
-                    xspace[j].add(v.transpose());
+                    xspace[j].add_rows(v.transpose());
                     for (unsigned r = 0; r < n; r++) {
                         q(r, idxq + j) = v.op(r);
                     }
                 }
-                rescale_submatrix(q, 0, n, idxq, i+1);
+                // Only rescale chains; single eigenvectors
+                // are already well scaled by vspace().
+                if (i != 0) {
+                    rescale_submatrix(q, 0, n, idxq, i+1);
+                }
                 idxq += i + 1;
+                jcs.push_back(i + 1);
+                jce.push_back(idxq);
             }
         }
     }
-    return q;
+    //assert(q.rank() == n);
+    return make_pair(q, jcs);
 }

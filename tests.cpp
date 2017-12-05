@@ -146,8 +146,8 @@ TEST_CASE("eigenvalues & eigenvectors") {
         {0, 0, 0, 0, 0, z},
     };
     for (auto &eval : eigenvalues(m)) {
-        for (auto &evec : eigenvectors_right(m, eval)) {
-            matrix z = ex_to<matrix>((m*evec - eval*evec).evalm());
+        for (auto &evec : eigenvectors_right(m, eval.first)) {
+            matrix z = ex_to<matrix>((m*evec - eval.first*evec).evalm());
             for (unsigned i = 0; i < z.rows(); i++) {
                 for (unsigned j = 0; j < z.cols(); j++) {
                     REQUIRE(normal(z(i, j)) == 0);
@@ -291,7 +291,7 @@ TEST_CASE("jordan") {
         {0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3},
     };
     matrix m = p.mul(j0).mul(p.inverse());
-    matrix q = jordan(m);
+    matrix q = jordan(m).first;
     REQUIRE(q.rank() == j0.rows());
     matrix j = q.inverse().mul(m).mul(q);
     for (unsigned r = 0; r < j.rows(); r++) {
