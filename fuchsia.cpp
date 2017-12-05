@@ -715,7 +715,7 @@ pfmatrix::with_balance_t(const matrix &P, const ex &x1, const ex &x2) const
  * given matrix m.
  */
 matrix
-balance_t(const matrix &m, const matrix &P, const ex &x1, const ex &x2, const ex &x)
+with_balance_t(const matrix &m, const matrix &P, const ex &x1, const ex &x2, const ex &x)
 {
     matrix coP = P.mul_scalar(-1);
     for (unsigned i = 0; i < coP.cols(); i++) {

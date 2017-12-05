@@ -127,7 +127,7 @@ TEST_CASE("pfmatrix") {
         {(x*x+2)/(y*x+1/y)+pow(y-1, 2)*x, (x-y)*(y-1/x)}
     };
     pfmatrix pfm(m, x);
-    matrix mm = pfm.to_matrix(x);
+    matrix mm = pfm.to_matrix();
     REQUIRE(ratcan(m) == ratcan(mm));
 }
 
@@ -171,7 +171,7 @@ TEST_CASE("pfmatrix add_*") {
         matrix mm1 = ex_to<matrix>((m + c*pow(x - pi, ki)*(x - x0)).evalm());
         pfmatrix pfm(m, x);
         pfm.add_mul(c, pi, ki, x0);
-        matrix mm2 = pfm.to_matrix(x);
+        matrix mm2 = pfm.to_matrix();
         REQUIRE(ratcan(mm1) == ratcan(mm2));
     };
     SECTION("add_mul, 1") { test_add_mul(c, 1, -2, -y*y); }
@@ -184,7 +184,7 @@ TEST_CASE("pfmatrix add_*") {
         matrix mm1 = ex_to<matrix>((m + c*pow(x - pi, ki)/(x - x0)).evalm());
         pfmatrix pfm(m, x);
         pfm.add_div(c, pi, ki, x0);
-        matrix mm2 = pfm.to_matrix(x);
+        matrix mm2 = pfm.to_matrix();
         REQUIRE(ratcan(mm1) == ratcan(mm2));
     };
     SECTION("add_div, 1") { test_add_div(c, 1, -2, -y*y); }
@@ -197,7 +197,7 @@ TEST_CASE("pfmatrix add_*") {
         matrix mm1 = ex_to<matrix>((m + c*pow(x - p1, k1)*pow(x - p2, k2)).evalm());
         pfmatrix pfm(m, x);
         pfm.add_pow(c, p1, k1, p2, k2);
-        matrix mm2 = pfm.to_matrix(x);
+        matrix mm2 = pfm.to_matrix();
         REQUIRE(ratcan(mm1) == ratcan(mm2));
     };
     SECTION("add_pow, 1") { test_add_pow(c, 1, -2, 0, 2); }
@@ -220,7 +220,7 @@ TEST_CASE("pfmatrix with_*") {
         {26, 27*x*x + 28/x, 29/x/(x-y), 30/x+31*x},
     };
     pfmatrix pfm(m, x);
-    REQUIRE(ratcan(m) == ratcan(pfm.to_matrix(x)));
+    REQUIRE(ratcan(m) == ratcan(pfm.to_matrix()));
     SECTION("with_constant_t") {
         matrix t = {
             {1, 2, 3, 4},
@@ -229,8 +229,8 @@ TEST_CASE("pfmatrix with_*") {
             {9, 5, 2, 1}
         };
         matrix mt = t.inverse().mul(m).mul(t);
-        matrix m2 = pfm.with_constant_t(t).to_matrix(x);
-        matrix m3 = pfm.with_constant_t(t.inverse(), t).to_matrix(x);
+        matrix m2 = pfm.with_constant_t(t).to_matrix();
+        matrix m3 = pfm.with_constant_t(t.inverse(), t).to_matrix();
         REQUIRE(ratcan(mt) == ratcan(m2));
         REQUIRE(ratcan(mt) == ratcan(m3));
     }
@@ -242,18 +242,18 @@ TEST_CASE("pfmatrix with_*") {
         matrix p = u.transpose().mul(u);
         REQUIRE(p.mul(p) == p);
         SECTION("0 --> y") {
-            matrix mt = balance_t(m, p, 0, y, x);
-            matrix m2 = pfm.with_balance_t(p, 0, y).to_matrix(x);
+            matrix mt = with_balance_t(m, p, 0, y, x);
+            matrix m2 = pfm.with_balance_t(p, 0, y).to_matrix();
             REQUIRE(ratcan(mt) == ratcan(m2));
         }
         SECTION("y --> infinity") {
-            matrix mt = balance_t(m, p, y, infinity, x);
-            matrix m2 = pfm.with_balance_t(p, y, infinity).to_matrix(x);
+            matrix mt = with_balance_t(m, p, y, infinity, x);
+            matrix m2 = pfm.with_balance_t(p, y, infinity).to_matrix();
             REQUIRE(ratcan(mt) == ratcan(m2));
         }
         SECTION("infinity --> 0") {
-            matrix mt = balance_t(m, p, infinity, 0, x);
-            matrix m2 = pfm.with_balance_t(p, infinity, 0).to_matrix(x);
+            matrix mt = with_balance_t(m, p, infinity, 0, x);
+            matrix m2 = pfm.with_balance_t(p, infinity, 0).to_matrix();
             REQUIRE(ratcan(mt) == ratcan(m2));
         }
     }
@@ -320,7 +320,6 @@ TEST_CASE("jordan 2") {
     auto q = qcs.first;
     auto cs = qcs.second;
     for (auto n : cs) {
-        cout << n << endl;
         REQUIRE(n > 0);
     }
     REQUIRE(q.rank() == m.rows());
