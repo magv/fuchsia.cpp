@@ -58,7 +58,7 @@ TEST_CASE("poly_decompose") {
 TEST_CASE("partial_fraction, 1 variable") {
     auto check_pf = [](const ex &e, const symbol &x) {
         ex p = partial_fraction(e, x);
-        REQUIRE(normal(e - p) == 0);
+        REQUIRE(ratcan(e) == ratcan(p));
     };
     symbol x("x");
     SECTION("0") {
@@ -97,7 +97,7 @@ TEST_CASE("partial_fraction, 1 variable") {
 TEST_CASE("partial_fraction, 2 variables") {
     auto check_pf = [](const ex &e, const symbol &x) {
         ex p = partial_fraction(e, x);
-        REQUIRE(normal(e - p) == 0);
+        REQUIRE(ratcan(e) == ratcan(p));
     };
     symbol x("x"), y("y");
     SECTION("1/(x-1)/(y-1)") {
@@ -128,11 +128,7 @@ TEST_CASE("pfmatrix") {
     };
     pfmatrix pfm(m, x);
     matrix mm = pfm.to_matrix(x);
-    for (unsigned i = 0; i < m.rows(); i++) {
-        for (unsigned j = 0; j < m.cols(); j++) {
-            REQUIRE(normal(m(i,j) - mm(i,j)).is_zero());
-        }
-    }
+    REQUIRE(ratcan(m) == ratcan(mm));
 }
 
 TEST_CASE("eigenvalues & eigenvectors") {
