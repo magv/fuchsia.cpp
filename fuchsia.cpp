@@ -1152,7 +1152,7 @@ jordan(const matrix &m)
     unsigned n = m.rows();
     map<ex, unsigned, ex_is_less> eval2almul = eigenvalues(m);
     matrix q(n, n);
-    vector<int> jcs, jce;
+    vector<int> jcs;
     int idxq = 0;
     for (const auto &kv : eval2almul) {
         const auto &eval = kv.first;
@@ -1162,49 +1162,58 @@ jordan(const matrix &m)
             mm(i, i) -= eval;
         }
         vector<vspace> nspace;
-        vector<vspace> xspace;
+        vspace xspace(n);
         matrix mmk = mm;
         for (;;) {
             auto ns = nullspace(mmk);
             nspace.push_back(ns);
-            xspace.push_back(vspace(n));
             if (ns.dim() == almul) break;
             mmk = mmk.mul(mm);
         }
         int kk = 0;
         for (int i = nspace.size() - 1; i >= 0; i--) {
-            xspace[i].normalize();
+            /* We're expecting kt - kk chains to start at rank i.
+             */
             int kt = (i == 0) ?
                 nspace[i].dim() : nspace[i].dim() - nspace[i-1].dim();
             for (int k = nspace[i].dim() - 1; kk < kt; k--) {
+                /* Find a vector in nspace[i] that is not in
+                 * nspace[i-1] (and thus, a chain head), and not
+                 * in xspace (not excluded).
+                 */
                 assert(k >= 0);
                 auto v = nspace[i].basis_col(k);
                 if ((i != 0) && nspace[i-1].contains(v)) continue;
-                if (xspace[i].contains(v)) continue;
+                if (xspace.contains(v)) continue;
+                /* Exclude v from the future results (so no
+                 * other vector is linearly dependent on it),
+                 * and build a Jordan chain starting from v.
+                 */
                 kk++;
-                if (kk < kt) {
-                    xspace[i].add_rows(v.transpose());
-                    xspace[i].normalize();
-                }
+                xspace.add_rows(v.transpose());
                 for (unsigned r = 0; r < n; r++) {
                     q(r, idxq + i) = v.op(r);
                 }
                 for (int j = i - 1; j >= 0; j--) {
                     v = mm.mul(v);
-                    xspace[j].add_rows(v.transpose());
+                    //assert(!xspace.contains(v));
+                    xspace.add_rows(v.transpose());
                     for (unsigned r = 0; r < n; r++) {
                         q(r, idxq + j) = v.op(r);
                     }
                 }
-                // Only rescale chains; single eigenvectors
-                // are already well scaled by vspace().
+                /* Only rescale chains of length > 1; single
+                 * eigenvectors are already well scaled by
+                 * vspace().
+                 */
                 if (i != 0) {
                     rescale_submatrix(q, 0, n, idxq, i+1);
                 }
+                xspace.normalize();
                 idxq += i + 1;
                 jcs.push_back(i + 1);
-                jce.push_back(idxq);
             }
+            assert(kk == kt);
         }
     }
     //assert(q.rank() == n);
