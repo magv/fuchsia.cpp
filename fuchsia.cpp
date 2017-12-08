@@ -1210,3 +1210,24 @@ jordan(const matrix &m)
     //assert(q.rank() == n);
     return make_pair(q, jcs);
 }
+
+/* Logging formatters
+ * ============================================================
+ */
+
+template<> inline void
+log_format(ostream &o, const matrix &m)
+{
+    save_matrix(o, m);
+}
+
+template<> inline void
+log_format(ostream &o, const vector<int> &v)
+{
+    o << "[";
+    for (size_t i = 0; i < v.size(); i++) {
+        if (i != 0) o << ", ";
+        o << v[i];
+    }
+    o << "]";
+}
