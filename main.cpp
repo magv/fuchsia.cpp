@@ -118,7 +118,9 @@ main(int argc, char *argv[])
         return 1;
     }
     else {
-        cerr << "fuchsia: unrecognized command (use -h to see usage)" << endl;
+        cerr << "fuchsia: unrecognized command '"
+             << argv[0]
+             << "' (use -h to see usage)" << endl;
         return 1;
     }
     if (matrix_m.nops() > 0) {
@@ -132,6 +134,8 @@ main(int argc, char *argv[])
     if (matrix_t.nops() > 0) {
         if (matrix_t_path != NULL) {
             save_matrix(matrix_t_path, matrix_t);
+        } else {
+            logi("not saving the transformation matrix (no -t argument)");
         }
     }
     return 0;
