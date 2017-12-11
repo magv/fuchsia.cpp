@@ -1309,7 +1309,7 @@ nullspace(const matrix &m)
     }
     // Solve M*V = 0
     matrix zero(nrows, 1);
-    matrix s = m.solve(v, zero);
+    matrix s = normal(m).solve(v, zero, solve_algo::gauss);
     matrix coeff(ncols, ncols);
     for (unsigned k = 0; k < ncols; k++) {
         for (unsigned i = 0; i < ncols; i++) {
