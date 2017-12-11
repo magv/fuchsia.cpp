@@ -1251,3 +1251,9 @@ log_format(ostream &o, const vector<int> &v)
     }
     o << "]";
 }
+
+template<> inline void
+log_format(ostream &o, const vspace &v)
+{
+    log_format(o, v.basis_rows());
+}
