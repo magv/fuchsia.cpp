@@ -271,7 +271,7 @@ poly_decompose(const ex &e, const ex &p, const symbol &x)
 ex
 ratcan(const ex &e)
 {
-    ex nd = numer_denom(e);
+    ex nd = e.normal().numer_denom();
     return nd.op(0).expand()/nd.op(1).expand();
 }
 
@@ -349,7 +349,7 @@ term_iter(const ex &e, F yield)
 template<typename F> void
 partial_fraction_iter(const ex &e, const symbol &x, F yield)
 {
-    ex nd = numer_denom(e);
+    ex nd = e.normal().numer_denom();
     ex numer = nd.op(0);
     ex denom = nd.op(1);
     auto qr = poly_divmod(numer, denom, x);
@@ -919,6 +919,7 @@ matrix_hack::append_rows(const matrix &src)
 
 /* Multiply a submatrix by the LCM of all of its denominators.
  * Divide it by the GCD of all of its numerators.
+ * Apply normal() on each element.
  */
 void
 rescale_submatrix(matrix &m, unsigned r, unsigned nr, unsigned c, unsigned nc)
@@ -930,7 +931,7 @@ rescale_submatrix(matrix &m, unsigned r, unsigned nr, unsigned c, unsigned nc)
     auto it_d = d.begin();
     for (unsigned i = r; i < r + nr; i++) {
         for (unsigned j = c; j < c + nc; j++) {
-            ex nd = m(i, j).numer_denom();
+            ex nd = m(i, j).normal().numer_denom();
             ex numer = nd.op(0);
             ex denom = nd.op(1);
             *it_n++ = numer;
@@ -941,6 +942,8 @@ rescale_submatrix(matrix &m, unsigned r, unsigned nr, unsigned c, unsigned nc)
     }
     if (div.is_zero()) return;
     if (mul.is_zero()) return;
+    // It would be tempting to exit here if div=mul=1, but we'd
+    // then discard the normal() call results.
     it_n = n.begin();
     it_d = d.begin();
     for (unsigned i = r; i < r + nr; i++) {
