@@ -1,18 +1,6 @@
 #include <unistd.h>
 #include "fuchsia.cpp"
 
-matrix
-c0_infinity(const pfmatrix &pfm)
-{
-    matrix m(pfm.nrows, pfm.ncols);
-    for (const auto &kv : pfm.residues) {
-        const auto &ki = kv.first.second;
-        const auto &ci = kv.second;
-        if (ki == -1) m = m.sub(ci);
-    }
-    return m;
-}
-
 void
 usage()
 {
@@ -24,6 +12,9 @@ usage()
         "    show [-x <name>] <matrix>\n"
         "        show a description of a given matrix\n"
         "\n"
+        "    fuchsify [-x <name>] [-m <path>] [-t <path>] <matrix>\n"
+        "        find a transformation that will transform a given matrix\n"
+        "        into Fuchsian form\n"
         "    sort [-m <path>] [-t <path>] <matrix>\n"
         "        find a block-triangular form of the given matrix\n"
         "\n"
@@ -103,6 +94,16 @@ main(int argc, char *argv[])
         block_triangular_permutation btp(m);
         matrix_m = btp.t().transpose().mul(m).mul(btp.t());
         matrix_t = btp.t();
+    }
+    else if ((argc == 2) && !strcmp(argv[0], "fuchsify")) {
+        symtab s;
+        matrix m;
+        tie(m, s) = load_matrix(argv[1], s);
+        symbol x = ex_to<symbol>(s[var_x_name]);
+        pfmatrix pfm(m, x);
+        auto r = fuchsify(pfm);
+        matrix_m = r.first.to_matrix();
+        matrix_t = ex_to_matrix(r.second);
     }
     else if ((argc == 3) && !strcmp(argv[0], "transform")) {
         symtab s;

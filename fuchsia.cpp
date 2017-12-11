@@ -1,6 +1,7 @@
 #include <ginac/ginac.h>
 #include <ginac/parser.h>
 #include <assert.h>
+#include <stdlib.h>
 #include <chrono>
 #include <fstream>
 #include <tuple>
@@ -146,6 +147,17 @@ struct _scopeexithack {
         } \
     }; \
     auto __log_s = _scopeexithack<decltype(__log_f)>(__log_f);
+
+/* The error base
+ * ============================================================
+ */
+
+class fuchsia_error : public exception {
+    const char *message;
+    public:
+    fuchsia_error(const char *message) : message(message) {};
+    virtual const char* what() const throw() { return message; }
+};
 
 /* Miscellaneous general utilities
  * ============================================================
@@ -1501,6 +1513,322 @@ dual_basis_spanning_left_invariant_subspace(const matrix &m, const matrix &u)
         }
     }
     return results;
+}
+
+/* Fuchsification
+ * ============================================================
+ */
+
+pair<vector<int>, matrix>
+alg1(matrix l0, const vector<int> &jcs)
+{
+    LOGME;
+    unsigned n = l0.rows();
+    vector<int> s(n);
+    matrix d(n, n);
+    matrix ident = identity_matrix(n);
+    unsigned nontrivialcells = 0;
+    for (int cs : jcs) {
+        if (cs > 1) nontrivialcells++;
+    }
+    for (;;) {
+        matrix lx = l0;
+        matrix tmp(n, 1);
+        for (unsigned i = 0; i < n; i++) {
+            tmp.let_op(i) = symbol();
+            if (s[i]) {
+                for (unsigned j = 0; j < n; j++) {
+                    lx(i, j) = 0;
+                    lx(j, i) = 0;
+                }
+            }
+        }
+        unsigned i = 0;
+        matrix sol;
+        for (;; i++) {
+            assert(i < n);
+            if (s[i]) continue;
+            matrix lxb4i = ex_to_matrix(sub_matrix(lx, 0, n, 0, i));
+            matrix tmpi = ex_to_matrix(sub_matrix(tmp, 0, i, 0, 1));
+            matrix lxi = ex_to_matrix(sub_matrix(lx, 0, n, i, 1));
+            try {
+                sol = lxb4i.solve(tmpi, lxi);
+                break;
+            } catch (const std::runtime_error &e) {
+                if (e.what() == std::string("matrix::solve(): inconsistent linear system")) {
+                    continue;
+                }
+                throw;
+            }
+        }
+        matrix d0(n, n);
+        matrix invd0(n, n);
+        for (unsigned j = 0; j < i; j++) {
+            d0(j, i) = sol.op(j);
+            invd0(j, i) = jcs[j] == jcs[i] ? -sol.op(j) : 0;
+        }
+        l0 = ident.sub(invd0).mul(l0).mul(ident.add(d0));
+        d = d.add(d0).add(d.mul(d0));
+        s[i] = true;
+        if (i < nontrivialcells) break;
+    }
+    // Check Alg.1 promise
+    for (unsigned j = 0; j < n; j++) {
+        for (unsigned k = 0; k < n; k++) {
+            if ((!s[j]) && (s[k])) {
+                assert(l0(j, k) == 0);
+            }
+        }
+    }
+    return make_pair(s, d);
+}
+
+pair<matrix, matrix>
+alg1x(const matrix &a0, const matrix &a1)
+{
+    LOGME;
+    unsigned n = a0.rows();
+    const auto &ucs = jordan(a0);
+    const matrix &u = ucs.first;
+    const vector<int> &jcs = ucs.second;
+    matrix invu = u.inverse();
+    unsigned ncells = jcs.size();
+    vector<int> jce(ncells);
+    vector<int> jcb(ncells);
+    int nsimplecells = 0;
+    for (unsigned i = 0; i < ncells; i++) {
+        jce[i] = (i == 0) ? jcs[0] : jce[i - 1] + jcs[i];
+        jcb[i] = (i == 0) ? 0 : jcb[i - 1] + jcs[i - 1];
+        if (jcs[i] == 1) nsimplecells++;
+    }
+    matrix l0(ncells, ncells);
+    matrix l1(ncells, ncells);
+    for (unsigned k = 0; k < ncells; k++) {
+        matrix v0t = ex_to_matrix(sub_matrix(invu, jce[k]-1, 1, 0, n));
+        for (unsigned l = 0; l < ncells; l++) {
+            matrix u0 = ex_to_matrix(sub_matrix(u, 0, n, jcb[l], 1));
+            l0(k, l) = v0t.mul(a1).mul(u0).op(0);
+            l1(k, l) = v0t.mul(u0).op(0);
+        }
+    }
+    ex det = l0.sub(l1.mul_scalar(symbol("λ"))).determinant().normal();
+    if (det != 0) {
+        loge("det|l0 - λ*l1| = {}", det);
+        throw fuchsia_error("matrix is Moser-irreducible");
+    }
+    const auto &sd = alg1(l0, jcs);
+    const auto &s = sd.first;
+    const auto &d = sd.second;
+    matrix ie = identity_matrix(n);
+    for (unsigned i = 0; i < ncells; i++) {
+        for (unsigned j = 0; j < ncells; j++) {
+            if (d(i, j) == 0) {
+                int ni = jcb[i];
+                int nj = jcb[j];
+                for (int k = 0; k < min(jcs[i], jcs[j]); k++) {
+                    ie(ni+k, nj+k) += d(i,j);
+                }
+            }
+        }
+    }
+    matrix ut = u.mul(ie);
+    matrix invut = ut.inverse();
+    int ns = 0;
+    for (unsigned i = 0; i < ncells; i++) {
+        if (s[i]) ns++;
+    }
+    matrix ru(n, ns);
+    matrix rv(ns, n);
+    for (unsigned i = 0, ii = 0; i < ncells; i++) {
+        if (s[i]) {
+            for (unsigned j = 0; j < n; j++) {
+                ru(j, ii) = ut(j, jcb[i]);
+                rv(ii, j) = invut(jcb[i], j);
+            }
+            ii++;
+        }
+    }
+    return make_pair(ru, rv);
+}
+
+matrix
+c0_infinity(const pfmatrix &pfm)
+{
+    matrix m(pfm.nrows, pfm.ncols);
+    for (const auto &kv : pfm.residues) {
+        const auto &ki = kv.first.second;
+        const auto &ci = kv.second;
+        if (ki == -1) m = m.sub(ci);
+    }
+    return m;
+}
+
+int
+complexity(const ex &e)
+{
+    if (is_exactly_a<numeric>(e)) {
+        const numeric n = ex_to<numeric>(e);
+        if (n.is_zero()) return 0;
+        return 8 + n.numer().int_length() + n.denom().int_length();
+    } else {
+        int c = 15;
+        for (const auto &sube : e) {
+            c += complexity(sube);
+        }
+        return c;
+    }
+}
+
+int
+complexity(const pfmatrix &pfm)
+{
+    int c = 0;
+    for (const auto kv : pfm.residues) {
+        const auto &pi = kv.first.first;
+        const auto &ci = kv.second;
+        c += complexity(pi);
+        c += complexity(ci);
+    }
+    return c;
+}
+
+ex
+balance_t(const matrix &p, const ex &x1, const ex &x2, const ex &x)
+{
+    matrix cop = identity_matrix(p.rows()).sub(p);
+    if (x1 == infinity) {
+        return cop - (x - x2)*p;
+    }
+    else if (x2 == infinity) {
+        return cop - 1/(x - x1)*p;
+    }
+    else {
+        return cop + (x - x2)/(x - x1)*p;
+    }
+}
+
+pair<pfmatrix, ex>
+fuchsify(const pfmatrix &m)
+{
+    LOGME;
+    pfmatrix pfm = m;
+    ex t = 1;
+    // 1. Take a look at all {pi->pj} balances (where ki<>-1 and
+    // kj<>-1), choose the least complex one.
+    //
+    // 2. Apply the found balance.
+    //
+    // 3. Repeat until Fuchsian.
+    struct Reduction { ex pi; ex pj; matrix p; pfmatrix pfm; };
+    for (;;) {
+        logd("Current matrix complexity: {}", complexity(pfm));
+        logd("Current matrix expansion:");
+        for (const auto kv : pfm.residues) {
+            const auto &xi = kv.first.first;
+            const auto &ki = kv.first.second;
+            const auto &c = kv.second;
+            if (c.is_zero_matrix()) continue;
+            logd("- pole of order {} at {}, complexity={}", ki, xi, complexity(c));
+        }
+        // Compute the highest powers of decomposition at each
+        // singular point (including infinity).
+        map<ex, int, ex_is_less> poincare_map;
+        for (auto &kv : pfm.residues) {
+            const auto &pi = kv.first.first;
+            const auto &ki = kv.first.second;
+            const auto &ci = kv.second;
+            if (ci.is_zero_matrix()) {
+                continue;
+            }
+            if (ki <= -1) {
+                if (poincare_map.find(pi) == poincare_map.end()) poincare_map[pi] = -1;
+                poincare_map[pi] = min(poincare_map[pi], ki);
+            }
+            if (ki >= -1) {
+                if (poincare_map.find(infinity) == poincare_map.end()) poincare_map[infinity] = -1;
+                poincare_map[infinity] = max(poincare_map[infinity], ki);
+            }
+        }
+        /* List all possible reductions between each pair of
+         * singular points.
+         */
+        vector<Reduction> reductions;
+        vector<Reduction> poor_reductions;
+        bool done = true;
+        for (auto &kvi : poincare_map) {
+            const auto &pi = kvi.first;
+            const auto &ki = kvi.second;
+            if (ki == -1) continue;
+            done = false;
+            const auto a0 = (pi == infinity) ? pfm(0, ki) : pfm(pi, ki);
+            if (a0.is_zero_matrix()) continue;
+            const auto a1 = (pi == infinity) ? (ki == 0) ? c0_infinity(pfm) : pfm(0, ki - 1) : pfm(pi, ki + 1);
+            const auto uv = alg1x(a0, a1);
+            for (auto &kvj : poincare_map) {
+                const auto &pj = kvj.first;
+                const auto &kj = kvj.second;
+                if (pi == pj) continue;
+                /* To guarantee progress, we only reduce from
+                 * points with higher Poincare rank to the ones
+                 * with lower.
+                 */
+                if (abs(kj + 1) >= abs(ki + 1)) continue;
+                //const auto b0 = (pj == infinity) ? pfm(0, kj) : pfm(pj, kj);
+                const auto b0 = (pj == infinity) ? (kj == -1) ? c0_infinity(pfm) : pfm(0, kj) : pfm(pj, kj);
+                if (b0.is_zero_matrix()) continue;
+                for (auto dualb : dual_basis_spanning_left_invariant_subspace(b0, uv.first)) {
+                    auto p = uv.first.mul(dualb);
+                    reductions.push_back(Reduction {
+                        pi,
+                        pj,
+                        p,
+                        pfm.with_balance_t(p, pi, pj)
+                    });
+                }
+            }
+            ex randomp = rand()%20 - 10;
+            poor_reductions.push_back(Reduction {
+                pi,
+                randomp,
+                uv.first.mul(uv.second),
+                pfm.with_balance_t(uv.first.mul(uv.second), pi, randomp)
+            });
+        }
+        if (done) { break; }
+        if (reductions.size() > 0) {
+            // Find and apply the smallest reduction.
+            size_t mini = 0;
+            int minc = complexity(reductions[0].pfm);
+            for (size_t i = 1; i < reductions.size(); i++) {
+                int c = complexity(reductions[i].pfm);
+                if (c < minc) {
+                    mini = i;
+                    minc = c;
+                }
+            }
+            Reduction &r = reductions[mini];
+            logi("use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
+            logi("new complexity is: {}", minc);
+            t = t * balance_t(r.p, r.pi, r.pj, pfm.x);
+            pfm = r.pfm;
+        } else {
+            logd("* no good reductions found, looking at the bad ones");
+            size_t mini = 0;
+            int minc = complexity(poor_reductions[0].pfm);
+            for (size_t i = 1; i < poor_reductions.size(); i++) {
+                int c = complexity(poor_reductions[i].pfm);
+                if (c < minc) {
+                    mini = i;
+                    minc = c;
+                }
+            }
+            Reduction &r = poor_reductions[mini];
+            logi("apply balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
+            t = t*balance_t(r.p, r.pi, r.pj, pfm.x);
+            pfm = r.pfm;
+        }
+    }
+    return make_pair(pfm, t);
 }
 
 /* Logging formatters
