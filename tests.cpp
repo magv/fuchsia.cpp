@@ -340,6 +340,58 @@ TEST_CASE("vspace contains") {
     }
 }
 
+TEST_CASE("dual_basis_spanning_left_invariant_subspace simple") {
+    matrix a = {
+        {0, 0, 1},
+        {0, 0, 2},
+        {0, 0, 0}
+    };
+    matrix u = {
+        {0},
+        {0},
+        {1},
+    };
+    auto b = dual_basis_spanning_left_invariant_subspace(a, u);
+    REQUIRE(b.size() == 1);
+    REQUIRE(b[0] == matrix({{0, 0, 1}}));
+}
+
+TEST_CASE("dual_basis_spanning_left_invariant_subspace full") {
+    auto REQUIRE_inv_subspace = [](const matrix &basis, const matrix &m) {
+        /* To check that a given basis really spans a left-
+         * invariant subspace of M, we need to check that for
+         * all v in span{basis}, v*M is in span{basis} too.
+         */
+        matrix v(1, basis.cols());
+        for (unsigned i = 0; i < basis.rows(); i++) {
+            symbol t;
+            v = ex_to_matrix(v + sub_matrix(basis, i, 1, 0, basis.cols())*t);
+        }
+        vspace b(basis);
+        REQUIRE(b.contains(v));
+        REQUIRE(b.contains(v.mul(m)));
+    };
+    symbol x("x"), y("y");
+    matrix a = {
+        {1, 0, 1, 3},
+        {0, 2, 0, 2},
+        {0, 0, 3, 0},
+        {0, 0, 0, 4},
+    };
+    matrix u = {
+        {1, 0},
+        {1, x},
+        {0, 1},
+        {0, 0},
+    };
+    auto blist = dual_basis_spanning_left_invariant_subspace(a, u);
+    REQUIRE(blist.size() >= 1);
+    for (auto basis : blist) {
+        REQUIRE(ratcan(basis.mul(u)) == identity_matrix(u.cols()));
+        REQUIRE_inv_subspace(basis, a);
+    }
+}
+
 TEST_CASE("nullspace") {
     symbol x("x");
     vspace vs = nullspace(matrix({

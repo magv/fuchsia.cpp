@@ -157,6 +157,22 @@ ex_to_matrix(const ex &m)
     return ex_to<matrix>(m.evalm());
 }
 
+matrix
+identity_matrix(unsigned n)
+{
+    matrix id(n, n);
+    for (unsigned i = 0; i < n; i++) {
+        id(i, i) = 1;
+    }
+    return id;
+}
+
+matrix
+matrix_solve_left(const matrix &m, const matrix &vars, const matrix &rhs)
+{
+    return m.transpose().solve(vars.transpose(), rhs.transpose()).transpose();
+}
+
 /* Infinity object.
  */
 struct infinity_s { infinity_s() {} };
@@ -1442,6 +1458,49 @@ jordan(const matrix &m)
     }
     //assert(q.rank() == n);
     return make_pair(q, jcs);
+}
+
+/* Find matrix V, such that its rows span a left invariant
+ * subspace of B and form a dual basis with columns of U
+ * (that is, V*U=I).
+ *
+ * There may be zero, one, or many such matrices. Return a list
+ * of them.
+ */
+vector<matrix>
+dual_basis_spanning_left_invariant_subspace(const matrix &m, const matrix &u)
+{
+    LOGME;
+    matrix mt = m.transpose();
+    matrix lev(0, m.rows()); // left (row-)eigenvectors of m
+    for (const auto &ev : eigenvalues(mt)) {
+        const auto &eval = ev.first;
+        vspace vs = eigenspace(mt, eval);
+        ((matrix_hack*)&lev)->append_rows(vs.basis_rows());
+        auto v = vs.basis_rows().mul(m);
+    }
+    matrix tmp(u.cols(), lev.mul(u).rows());
+    exmap tmpz;
+    for (unsigned i = 0; i < tmp.nops(); i++) {
+        symbol t;
+        tmp.let_op(i) = t;
+        tmpz[t] = 0;
+    }
+    matrix identity = identity_matrix(u.cols());
+    vector<matrix> results;
+    try {
+        // Solve x*lev*u=1, and take x*lev as the result.
+        matrix x = matrix_solve_left(lev.mul(u), tmp, identity);
+        for (unsigned i = 0; i < x.nops(); i++) {
+            x.let_op(i) = x.op(i).subs(tmpz);
+        }
+        results.push_back(x.mul(lev));
+    } catch (const std::runtime_error &e) {
+        if (e.what() != std::string("matrix::solve(): inconsistent linear system")) {
+            throw;
+        }
+    }
+    return results;
 }
 
 /* Logging formatters
