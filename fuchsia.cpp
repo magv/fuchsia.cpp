@@ -53,7 +53,7 @@ log_print_start(const char *lvl)
 {
     auto t = chrono::steady_clock::now();
     auto dt = chrono::duration_cast<chrono::duration<double>>(t - _log_starttime).count();
-    cout << "\033[32m[" << lvl << " " << std::fixed << std::setprecision(3) << dt << "s +";
+    cout << "\033[32m[" << lvl << " " << std::fixed << std::setprecision(4) << dt << "s +";
     cout << chrono::duration_cast<chrono::duration<double>>(t - _log_lasttime).count() << "s";
     for (int i = 0; i < _log_depth; i++) {
         cout << " *";
