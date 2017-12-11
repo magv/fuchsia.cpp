@@ -1053,12 +1053,13 @@ vspace::contains(const matrix &v) const
 {
     assert(v.nops() == basis.cols());
     matrix vv = v;
+    rescale_submatrix(vv, 0, v.rows(), 0, v.cols());
     unsigned p = 0;
     // Division-free subtraction of basis vectors from v.
     for (unsigned i = 0; i < basis.rows(); i++, p++) {
         for (;;) {
             if (!basis(i, p).is_zero()) break;
-            vv.let_op(p) = expand(vv.op(p));
+            vv.let_op(p) = normal(vv.op(p));
             if (!vv.op(p).is_zero())
                 return false;
             p++;
@@ -1068,12 +1069,12 @@ vspace::contains(const matrix &v) const
             const ex b_ip = basis(i, p);
             vv.let_op(p) = 0;
             for (unsigned j = p + 1; j < basis.cols(); j++) {
-                vv.let_op(j) = vv.op(j)*b_ip - basis(i, j)*vv_p;
+                vv.let_op(j) = normal(vv.op(j)*b_ip - basis(i, j)*vv_p);
             }
         }
     }
     for (unsigned i = p; i < basis.cols(); i++) {
-        vv.let_op(i) = expand(vv.op(i));
+        vv.let_op(i) = normal(vv.op(i));
         if (!vv.op(i).is_zero())
             return false;
     }
