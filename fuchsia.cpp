@@ -889,33 +889,15 @@ eigenvalues(const matrix &m)
     return eigenvalues;
 }
 
-/* Since matrix::fraction_free_elimination and other useful
- * members are protected, we need to eploy this hack to access
- * them.
+/* Since the internals of matrix class are protected, we need
+ * to employ this hack to access them.
  */
 class matrix_hack : public matrix {
     public:
-    void echelon_form();
     void append_rows(const matrix &src);
+    exvector &mvec();
+    void resize(unsigned nrows);
 };
-
-void
-matrix_hack::echelon_form()
-{
-    if (row <= 2) {
-        division_free_elimination(false);
-    } else {
-        fraction_free_elimination(false);
-    }
-    while (row > 0) {
-        for (unsigned i = 0; i < col; i++) {
-            if (!m[(row - 1)*col + i].is_zero()) goto done;
-        }
-        row--;
-    }
-done:;
-    m.resize(row*col);
-}
 
 void
 matrix_hack::append_rows(const matrix &src)
@@ -923,6 +905,20 @@ matrix_hack::append_rows(const matrix &src)
     assert(col == src.cols());
     row += src.rows();
     m.insert(m.end(), ((const matrix_hack*)&src)->m.begin(), ((const matrix_hack*)&src)->m.end());
+}
+
+exvector &
+matrix_hack::mvec()
+{
+    ensure_if_modifiable();
+    return m;
+}
+
+void
+matrix_hack::resize(unsigned nrows)
+{
+    row = nrows;
+    m.resize(row*col);
 }
 
 /* Multiply a submatrix by the LCM of all of its denominators.
@@ -965,6 +961,213 @@ rescale_submatrix(matrix &m, unsigned r, unsigned nr, unsigned c, unsigned nc)
     }
 }
 
+/* Transform a given matrix into upper-echelon form via Gauss
+ * elimination.
+ *
+ * Requires O(N^3) GCD operations and about the same amount of
+ * arithmetic ones for dense matrices, but about O(N*K) for
+ * sparse matrices with K entries.
+ */
+void
+echelon_form_gauss(matrix &m)
+{
+    unsigned nr = m.rows();
+    unsigned nc = m.cols();
+    exvector &mv = ((matrix_hack*)&m)->mvec();
+    for (unsigned i = 0; i < nr*nc; i++) {
+        mv[i] = mv[i].normal();
+    }
+    unsigned r0 = 0;
+    unsigned c0 = 0;
+    for (; (c0 < nc) && (r0 < nr - 1); c0++) {
+        for (unsigned r = r0; r < nr; r++) {
+            mv[r*nc + c0] = mv[r*nc + c0].normal();
+        }
+        // No normalization before is_zero() here, because
+        // we maintain the matrix normalized throughout the
+        // algorithm.
+        unsigned pivot = r0;
+        while ((pivot < nr) && mv[pivot*nc + c0].is_zero()) {
+            pivot++;
+        }
+        if (pivot == nr) {
+            // The whole column below r0:c0 is zero, let's skip
+            // it.
+            continue;
+        }
+        if (pivot > r0) {
+            // Found a non-zero row somewhere below r0; let's
+            // swap it in.
+            for (unsigned c = c0; c < nc; c++) {
+                mv[pivot*nc + c].swap(mv[r0*nc + c]);
+            }
+        }
+        ex a = mv[r0*nc + c0];
+        for (unsigned r = r0 + 1; r < nr; r++) {
+            ex b = mv[r*nc + c0];
+            if (!b.is_zero()) {
+                ex k = b/a;
+                mv[r*nc + c0] = 0;
+                for (unsigned c = c0 + 1; c < nc; c++) {
+                    mv[r*nc + c] = normal(mv[r*nc + c] - k*mv[r0*nc + c]);
+                }
+            }
+        }
+        r0++;
+    }
+    // Zero out the remaining rows (just in case).
+    for (unsigned r = r0 + 1; r < nr; r++) {
+        for (unsigned c = 0; c < nc; c++) {
+            mv[r*nc + c] = 0;
+        }
+    }
+}
+
+/* Transform a given matrix into upper-echelon form via Bareiss
+ * elimination.
+ *
+ * Requires O(N^2) GCD operations and O(N^3) arithmetic ones.
+ * Generally faster than Gauss on dense matrices. Don't use this
+ * on sparse matrices: it is slower than Gauss and you'll get
+ * pretty big common factors on each row.
+ */
+void
+echelon_form_bareiss_plain(matrix &m)
+{
+    unsigned nr = m.rows();
+    unsigned nc = m.cols();
+    for (unsigned r = 0; r < nr; r++) {
+        rescale_submatrix(m, r, 1, 0, nc);
+    }
+    exvector &mv = ((matrix_hack*)&m)->mvec();
+    ex z = 1;
+    unsigned r0 = 0;
+    for (unsigned c0 = 0; (c0 < nc) && (r0 < nr - 1); c0++) {
+        unsigned pivot = r0;
+        // No normalization before is_zero() here, because
+        // we maintain the matrix normalized throughout the
+        // algorithm.
+        while ((pivot < nr) && mv[pivot*nc + c0].is_zero()) pivot++;
+        if (pivot == nr) {
+            // The whole column below r0:c0 is zero, let's skip
+            // it.
+            continue;
+        }
+        if (pivot > r0) {
+            // Found a non-zero row somewhere below r0; let's
+            // swap it in.
+            for (unsigned c = c0; c < nc; c++) {
+                mv[pivot*nc + c].swap(mv[r0*nc + c]);
+            }
+        }
+        ex a = mv[r0*nc + c0];
+        for (unsigned r = r0 + 1; r < nr; r++) {
+            ex b = mv[r*nc + c0];
+            for (unsigned c = c0 + 1; c < nc; c++) {
+                ex v;
+                bool divok = divide(a*mv[r*nc + c] - b*mv[r0*nc + c], z, v);
+                assert(divok);
+                // Since v is a polynomial, the call to normal()
+                // here does not involve GCD, but rather just
+                // expands sums while preserving common factors,
+                // which is nomally preferable to full expand().
+                m[r*nc + c] = normal(v);
+            }
+            mv[r*nc + c0] = 0;
+        }
+        z = a;
+        r0++;
+    }
+    // Zero out the remaining rows (just in case).
+    for (unsigned r = r0 + 1; r < nr; r++) {
+        for (unsigned c = 0; c < nc; c++) {
+            mv[r*nc + c] = 0;
+        }
+    }
+}
+
+/* Transform a given matrix into upper-echelon form via a version
+ * of Bareiss elimination.
+ *
+ * Requires O(N^2) GCD operations and O(N^3) arithmetic ones.
+ * Generally faster than Gauss on dense matrices, but slower on
+ * sparse ones.
+ */
+void
+echelon_form_bareiss(matrix &m)
+{
+    unsigned nr = m.rows();
+    unsigned nc = m.cols();
+    for (unsigned r = 0; r < nr; r++) {
+        rescale_submatrix(m, r, 1, 0, nc);
+    }
+    exvector &mv = ((matrix_hack*)&m)->mvec();
+    exvector extraf(nr);
+    for (unsigned r = 0; r < nr; r++) { extraf[r] = 1; }
+    ex z = 1;
+    unsigned r0 = 0;
+    for (unsigned c0 = 0; (c0 < nc) && (r0 < nr - 1); c0++) {
+        unsigned pivot = r0;
+        // No normalization before is_zero() here, because
+        // we maintain the matrix normalized throughout the
+        // algorithm.
+        while ((pivot < nr) && mv[pivot*nc + c0].is_zero()) { pivot++; }
+        if (pivot == nr) {
+            // The whole column below r0:c0 is zero, we can skip
+            // it.
+            continue;
+        }
+        if (pivot > r0) {
+            // Found a non-zero row somewhere below r0; let's
+            // swap it in.
+            for (unsigned c = c0; c < nc; c++) {
+                mv[pivot*nc + c].swap(mv[r0*nc + c]);
+            }
+            extraf[pivot].swap(extraf[r0]);
+        }
+        ex a = mv[r0*nc + c0];
+        for (unsigned r = r0 + 1; r < nr; r++) {
+            ex b = mv[r*nc + c0];
+            if (b.is_zero()) {
+                // This branch is the same as the next one, but
+                // is is simplified due to b being 0.
+                ex f;
+                assert(divide(a*extraf[r0]*extraf[r], z, f));
+                extraf[r] = f;
+            } else {
+                ex g = gcd(a*extraf[r0], b*extraf[r]);
+                ex f;
+                gcd(extraf[r0]*g, z, &f);
+                f = normal(f);
+                ex d;
+                assert(divide(z*f, extraf[r0]*extraf[r], d));
+                for (unsigned c = c0 + 1; c < nc; c++) {
+                    ex v;
+                    assert(divide(a*mv[r*nc + c] - b*mv[r0*nc + c], d, v));
+                    // Since v is a polynomial, the call to normal()
+                    // here does not involve GCD, but rather just
+                    // expands sums while preserving common factors,
+                    // which is nomally preferable to full expand().
+                    m[r*nc + c] = normal(v);
+                }
+                mv[r*nc + c0] = 0;
+                extraf[r] = f;
+            }
+        }
+        z = a*extraf[r0];
+        r0++;
+    }
+    // Zero out the remaining rows (just in case).
+    for (unsigned r = r0 + 1; r < nr; r++) {
+        for (unsigned c = 0; c < nc; c++) {
+            mv[r*nc + c] = 0;
+        }
+    }
+    // At this point mv[r*nc + c]*extraf[r] is precisely what
+    // plain Bareiss algorithm would have computed; we can now
+    // discard this extra factor freely.
+}
+
 /* A vector (sub-)space represented by a set of basis vectors.
  */
 struct vspace {
@@ -1004,7 +1207,16 @@ vspace::add_rows(const matrix &v)
 void
 vspace::normalize()
 {
-    ((matrix_hack*)&basis)->echelon_form();
+    echelon_form_gauss(basis);
+    //echelon_form_bareiss(basis);
+    unsigned nrows = basis.rows();
+    for (; nrows > 0; nrows--) {
+        for (unsigned c = 0; c < basis.cols(); c++) {
+            if (!basis(nrows - 1, c).normal().is_zero()) goto done;
+        }
+    }
+done:;
+    ((matrix_hack*)&basis)->resize(nrows);
     for (unsigned i = 0; i < basis.rows(); i++) {
         rescale_submatrix(basis, i, 1, 0, basis.cols());
     }
