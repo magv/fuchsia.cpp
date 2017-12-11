@@ -135,8 +135,16 @@ struct _scopeexithack {
 #define LOGME \
     const auto &__log_func = __func__; \
     logd("> {}()", __log_func); \
+    const auto __log_t0 = _log_lasttime; \
     _log_depth++; \
-    auto __log_f = [&]{_log_depth--;logd("< {}()",__log_func);}; \
+    auto __log_f = [&]{ \
+        _log_depth--; \
+        if (log_verbose) { \
+            auto t = chrono::steady_clock::now(); \
+            auto dt = chrono::duration_cast<chrono::duration<double>>(t - __log_t0).count(); \
+            logd("< {}(+{}s)",__log_func, dt); \
+        } \
+    }; \
     auto __log_s = _scopeexithack<decltype(__log_f)>(__log_f);
 
 /* Miscellaneous general utilities
