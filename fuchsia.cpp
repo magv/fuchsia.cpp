@@ -1712,7 +1712,7 @@ fuchsify(const pfmatrix &m)
 {
     LOGME;
     pfmatrix pfm = m;
-    ex t = 1;
+    ex t = unit_matrix(m.nrows, m.ncols);
     // 1. Take a look at all {pi->pj} balances (where ki<>-1 and
     // kj<>-1), choose the least complex one.
     //
