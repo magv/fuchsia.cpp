@@ -1491,7 +1491,7 @@ dual_basis_spanning_left_invariant_subspace(const matrix &m, const matrix &u)
         ((matrix_hack*)&lev)->append_rows(vs.basis_rows());
         auto v = vs.basis_rows().mul(m);
     }
-    matrix tmp(u.cols(), lev.mul(u).rows());
+    matrix tmp(u.cols(), lev.rows());
     exmap tmpz;
     for (unsigned i = 0; i < tmp.nops(); i++) {
         symbol t;
