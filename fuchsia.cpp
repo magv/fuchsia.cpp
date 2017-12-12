@@ -364,6 +364,28 @@ factor_iter(const ex &e, F yield)
     }
 }
 
+/* Factor an expression and iterate through its factors the same
+ * way factor_iter does it.
+ *
+ * This would be normally the same as:
+ *     factor_iter(factor(...), ...)
+ *
+ * ... but GiNaC's factor(...) is known to expand its arguments
+ * (leading to slowness and sometimes hangs), while this routine
+ * doesn't. Consider this to be a bug fix.
+ */
+template<typename F> void
+factor_and_iter(const ex &e, F yield)
+{
+    factor_iter(e,
+        [&](const ex &f1, int k1) {
+            factor_iter(factor(f1),
+                [&](const ex &f2, int k2) {
+                    yield(f2, k1*k2);
+                });
+        });
+}
+
 /* Iterate through terms of e, call yield(t) for each one.
  */
 template <typename F> void
@@ -898,7 +920,7 @@ eigenvalues(const matrix &m)
     map<ex, unsigned, ex_is_less> eigenvalues;
     symbol lambda("λ");
     ex charpoly = charpoly_by_blocks(m, lambda);
-    factor_iter(factor(charpoly),
+    factor_and_iter(charpoly,
         [&](const ex &f, int k) {
             int deg = f.degree(lambda);
             if (deg == 0) {
