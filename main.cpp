@@ -21,10 +21,15 @@ usage()
         "    transform [-x <name>] [-m <path>] <matrix> <transform>\n"
         "        transform a given matrix using a given transformation\n"
         "\n"
+        "    changevar [-x <name>] [-y <name>] [-m <path>] <matrix> <expr>\n"
+        "        transform a given matrix by susbtituting free variable\n"
+        "        by a given expression\n"
+        "\n"
         "Options:\n"
         "    -h          show this help message\n"
         "    -v          produce a more verbose log\n"
         "    -x <name>   use this name for the free variable (default: x)\n"
+        "    -y <name>   use this name for the new free variable (default: y)\n"
         "    -e <name>   use this name for the infinitesimal parameter (default: eps)\n"
         "    -m <path>   save the resulting matrix into this file\n"
         "    -t <path>   save the resulting transformation into this file\n"
@@ -39,14 +44,16 @@ int
 main(int argc, char *argv[])
 {
     const char *var_x_name = "x";
+    const char *var_y_name = "y";
     const char *var_eps_name = "eps";
     const char *matrix_m_path = NULL;
     const char *matrix_t_path = NULL;
-    for (int opt; (opt = getopt(argc, argv, "hvx:e:m:t:s:")) != -1;) {
+    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:s:")) != -1;) {
         switch (opt) {
         case 'h': usage(); return 0;
         case 'v': log_verbose = true; break;
         case 'x': var_x_name = optarg; break;
+        case 'y': var_y_name = optarg; break;
         case 'e': var_eps_name = optarg; break;
         case 'm': matrix_m_path = optarg; break;
         case 't': matrix_t_path = optarg; break;
@@ -113,6 +120,18 @@ main(int argc, char *argv[])
         symbol x = ex_to<symbol>(s[var_x_name]);
         pfmatrix pfm(t.inverse().mul(m.mul(t).sub(ex_to_matrix(t.diff(x)))), x);
         matrix_m = pfm.to_matrix();
+    }
+    else if ((argc == 3) && !strcmp(argv[0], "changevar")) {
+        auto ms = load_matrix(argv[1], symtab());
+        matrix m = ms.first;
+        symtab s = ms.second;
+        parser reader(s);
+        auto xsubs = reader(argv[2]);
+        s = reader.get_syms();
+        symbol x = ex_to<symbol>(s[var_x_name]);
+        symbol y = ex_to<symbol>(s[var_y_name]);
+        matrix m2 = ex_to_matrix(m.subs(exmap{{x, xsubs}})).mul_scalar(xsubs.diff(y));
+        matrix_m = pfmatrix(m2, y).to_matrix();
     }
     else if (argc == 0) {
         cerr << "fuchsia: no command provided (use -h to see usage)" << endl;
