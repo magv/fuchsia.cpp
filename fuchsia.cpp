@@ -386,6 +386,17 @@ factor_and_iter(const ex &e, F yield)
         });
 }
 
+ex
+factor_fixed(const ex &e)
+{
+    ex res = 1;
+    factor_and_iter(e,
+        [&](const ex &f, int k) {
+            res *= pow(f, k);
+        });
+    return res;
+}
+
 /* Iterate through terms of e, call yield(t) for each one.
  */
 template <typename F> void
@@ -413,12 +424,30 @@ partial_fraction_iter(const ex &e, const symbol &x, F yield)
     auto qr = poly_divmod(numer, denom, x);
     ex q = qr.first;
     ex r = qr.second;
-    denom = factor(denom);
+    // At this point e == q + r/denom.
     struct Term { ex f; int n; };
     vector<Term> factors;
-    factor_iter(denom,
+    ex denomf = 1;
+    exmap sym2ex;
+    factor_iter(factor_fixed(denom),
         [&](const ex &f, int i) {
-            factors.push_back(Term{f, i});
+            // We'll replace coefficient expressions with newly
+            // generated symbols, and will subs() them back in
+            // near the end. This makes it possible to work with
+            // larger expressions.
+            ex frenamed = 0;
+            for (int i = 0; i <= f.degree(x); i++) {
+                ex c = f.coeff(x, i);
+                if (!is_a<numeric>(c) && !is_a<symbol>(c)) {
+                    symbol t;
+                    sym2ex[t] = c;
+                    frenamed += t*pow(x, i);
+                } else {
+                    frenamed += c*pow(x, i);
+                }
+            }
+            denomf *= pow(frenamed, i);
+            factors.push_back(Term{frenamed, i});
         });
     lst clist;
     ex eq = -r;
@@ -434,7 +463,7 @@ partial_fraction_iter(const ex &e, const symbol &x, F yield)
                 clist.append(c);
                 pfnum += c*pow(x, l);
             }
-            eq += expand(pfnum*(denom/pow(f.f, k)));
+            eq += expand(pfnum*(denomf/pow(f.f, k)));
         }
     }
     lst eqlist;
@@ -443,14 +472,14 @@ partial_fraction_iter(const ex &e, const symbol &x, F yield)
     for (int k = deg_lo; k <= deg_hi; k++) {
         eqlist.append(eq.coeff(x, k) == 0);
     }
-    ex sol = lsolve(eqlist, clist);
+    ex sol = lsolve(eqlist, clist, solve_algo::gauss);
     q = q.expand().collect(x);
     for (int k = q.ldegree(x); k <= q.degree(x); k++) {
         ex c = q.coeff(x, k);
         if (!c.is_zero()) yield(c, x, k);
     }
     // For each factor...
-    int idx = 0;
+    unsigned idx = 0;
     for (const auto &f : factors) {
         int deg = f.f.degree(x);
         // For each power of factor...
@@ -458,10 +487,12 @@ partial_fraction_iter(const ex &e, const symbol &x, F yield)
             ex pfnum = 0;
             // For each power of the parfrac term numerator...
             for (int l = 0; l < deg; l++) {
-                pfnum += sol.op(idx).rhs()*pow(x, l);
+                assert(idx < sol.nops());
+                pfnum += (sol.op(idx).rhs().subs(sym2ex))*pow(x, l);
                 idx++;
             }
-            if (!pfnum.is_zero()) yield(pfnum, f.f, -k);
+            if (!pfnum.is_zero())
+                yield(pfnum, f.f.subs(sym2ex), -k);
         }
     }
 }
