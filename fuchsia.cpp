@@ -1584,11 +1584,22 @@ alg1(matrix l0, const vector<int> &jcs)
     for (int cs : jcs) {
         if (cs > 1) nontrivialcells++;
     }
+    // This is needed to avoid un-normal zeros spoiling
+    // matrix::solve() calls.
+    l0 = normal(l0);
+    unsigned k0 = 0;
     for (;;) {
+        // Strike out rows and columns with s[i]==true from l0.
         matrix lx = l0;
         matrix tmp(n, 1);
+        exmap tmpz;
         for (unsigned i = 0; i < n; i++) {
-            tmp.let_op(i) = symbol();
+            symbol t;
+            tmp.let_op(i) = t;
+            // This map is needed to remove symbols corresposing to
+            // striked out rows from the output of matrix::solve()
+            // call below.
+            tmpz[t] = 0;
             if (s[i]) {
                 for (unsigned j = 0; j < n; j++) {
                     lx(i, j) = 0;
@@ -1596,6 +1607,8 @@ alg1(matrix l0, const vector<int> &jcs)
                 }
             }
         }
+        // Find the first column of lx linearly dependent on the
+        // previous ones, not counting the striked out columns.
         unsigned i = 0;
         matrix sol;
         for (;; i++) {
@@ -1605,7 +1618,8 @@ alg1(matrix l0, const vector<int> &jcs)
             matrix tmpi = ex_to_matrix(sub_matrix(tmp, 0, i, 0, 1));
             matrix lxi = ex_to_matrix(sub_matrix(lx, 0, n, i, 1));
             try {
-                sol = lxb4i.solve(tmpi, lxi);
+                sol = lxb4i.solve(tmpi, lxi, solve_algo::gauss);
+                //assert(normal(lxb4i.mul(sol).sub(lxi)).is_zero_matrix());
                 break;
             } catch (const std::runtime_error &e) {
                 if (e.what() == std::string("matrix::solve(): inconsistent linear system")) {
@@ -1617,22 +1631,27 @@ alg1(matrix l0, const vector<int> &jcs)
         matrix d0(n, n);
         matrix invd0(n, n);
         for (unsigned j = 0; j < i; j++) {
-            d0(j, i) = sol.op(j);
-            invd0(j, i) = jcs[j] == jcs[i] ? -sol.op(j) : 0;
+            assert(j < sol.nops());
+            d0(j, i) = -sol.op(j).subs(tmpz);
+            invd0(j, i) = jcs[j] == jcs[i] ? -sol.op(j).subs(tmpz) : 0;
         }
-        l0 = ident.sub(invd0).mul(l0).mul(ident.add(d0));
+        l0 = normal(ident.sub(invd0).mul(l0).mul(ident.add(d0)));
         d = d.add(d0).add(d.mul(d0));
+        if (i < nontrivialcells) {
+            k0 = i;
+            break;
+        }
         s[i] = true;
-        if (i < nontrivialcells) break;
     }
-    // Check Alg.1 promise
+    // Check alg1() promise.
     for (unsigned j = 0; j < n; j++) {
         for (unsigned k = 0; k < n; k++) {
-            if ((!s[j]) && (s[k])) {
-                assert(l0(j, k) == 0);
+            if ((!s[j]) && (s[k] || (k == k0))) {
+                assert(l0(j, k).is_zero());
             }
         }
     }
+    s[k0] = true;
     return make_pair(s, d);
 }
 
