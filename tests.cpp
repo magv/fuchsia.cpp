@@ -120,6 +120,63 @@ TEST_CASE("partial_fraction, 2 variables") {
     }
 }
 
+TEST_CASE("partial_fraction, large coefficients") {
+    symbol x("x"), d("d");
+    symbol m1("m1"), m2("m2"), m3("m3"), m4("m4"), m5("m5");
+    ex e =
+        (pow(m4, 2)*pow(m2, 4)*d
+            + 2*pow(m4, 2)*pow(m2, 2)*x
+            - pow(m4, 2)*d*x*pow(m5, 2)
+            - 2*pow(m4, 2)*x*pow(m1, 2)
+            + 2*pow(m4, 2)*pow(m2, 2)*pow(m5, 2)
+            - pow(m4, 2)*pow(m2, 2)*d*pow(m5, 2)
+            - pow(m4, 2)*pow(m2, 2)*d*x
+            - pow(m4, 4)*d*pow(m1, 2)
+            - 2*pow(m4, 4)*pow(m5, 2)
+            + pow(m4, 2)*d*x*pow(m1, 2)
+            + 2*pow(m4, 2)*pow(m2, 2)*pow(m1, 2)
+            + 2*pow(m4, 2)*x*pow(m5, 2)
+            - 4*pow(m4, 2)*pow(m2, 2)*pow(m3, 2)
+            + 2*pow(m4, 4)*pow(m2, 2)
+            + pow(m4, 4)*d*pow(m5, 2)
+            + 2*pow(m4, 2)*pow(m2, 2)*d*pow(m3, 2)
+            - 2*pow(m4, 2)*pow(m2, 4)
+            + 2*pow(m4, 4)*pow(m1, 2)
+            - pow(m4, 2)*pow(m2, 2)*d*pow(m1, 2)
+            - pow(m4, 4)*pow(m2, 2)*d)
+        / (2*x)
+        / (2*pow(m2, 2)*x
+            + 2*pow(m4, 2)*pow(m2, 2)
+            - pow(m2, 4)
+            - x*x
+            + 2*pow(m4, 2)*x
+            - pow(m4, 4))
+         / (pow(m4, 2)*pow(m5, 2)*pow(m1, 2)
+            + pow(m2, 2)*x*pow(m5, 2)
+            + pow(m4, 2)*pow(m3, 2)*pow(m1, 2)
+            - pow(m4, 2)*pow(m2, 2)*x
+            - pow(m4, 2)*pow(m5, 2)*pow(m3, 2)
+            + pow(m4, 2)*x*pow(m1, 2)
+            - pow(m2, 4)*pow(m3, 2)
+            - pow(m2, 2)*pow(m3, 4)
+            - x*x*pow(m5, 2)
+            - x*pow(m5, 4)
+            + pow(m2, 2)*x*pow(m3, 2)
+            + pow(m2, 2)*pow(m3, 2)*pow(m1, 2)
+            + pow(m4, 2)*pow(m2, 2)*pow(m1, 2)
+            + pow(m4, 2)*x*pow(m5, 2)
+            - pow(m2, 2)*pow(m5, 2)*pow(m1, 2)
+            - pow(m4, 2)*pow(m1, 4)
+            + pow(m4, 2)*pow(m2, 2)*pow(m3, 2)
+            + pow(m2, 2)*pow(m5, 2)*pow(m3, 2)
+            - x*pow(m3, 2)*pow(m1, 2)
+            + x*pow(m5, 2)*pow(m1, 2)
+            - pow(m4, 4)*pow(m1, 2)
+            + x*pow(m5, 2)*pow(m3, 2));
+    ex p = partial_fraction(e, x);
+    REQUIRE(ratcan(e) == ratcan(p));
+}
+
 TEST_CASE("pfmatrix") {
     symbol x("x"), y("y");
     matrix m = {
