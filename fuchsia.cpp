@@ -930,6 +930,25 @@ charpoly_by_blocks(const matrix &m, const ex &lambda)
     return cp;
 }
 
+/* Compute and return determinant of a matrix by
+ * first permuting it into block-triangular shape.
+ */
+ex
+determinant_by_blocks(const matrix &m)
+{
+    LOGME;
+    block_triangular_permutation btp(m);
+    matrix mm = btp.t().transpose().mul(m).mul(btp.t());
+    ex res = 1;
+    int o = 0;
+    for (int size : btp.block_size()) {
+        matrix b = ex_to<matrix>(sub_matrix(mm, o, size, o, size));
+        res *= b.determinant();
+        o += size;
+    }
+    return res;
+}
+
 template<typename F> void
 factor_twice_and_iter(const ex &e, F yield)
 {
@@ -1661,7 +1680,9 @@ alg1x(const matrix &a0, const matrix &a1)
     LOGME;
     unsigned n = a0.rows();
     const auto &ucs = jordan(a0);
-    const matrix &u = ucs.first;
+    // This normal() is here partially to make sure u.inverse()
+    // doesn't fail when dealing with un-normal zeros.
+    const matrix &u = normal(ucs.first);
     const vector<int> &jcs = ucs.second;
     matrix invu = u.inverse();
     unsigned ncells = jcs.size();
@@ -1683,8 +1704,8 @@ alg1x(const matrix &a0, const matrix &a1)
             l1(k, l) = v0t.mul(u0).op(0);
         }
     }
-    ex det = l0.sub(l1.mul_scalar(symbol("λ"))).determinant().normal();
-    if (det != 0) {
+    ex det = determinant_by_blocks(l0.sub(l1.mul_scalar(symbol("λ")))).normal();
+    if (!det.is_zero()) {
         loge("det|l0 - λ*l1| = {}", det);
         throw fuchsia_error("matrix is Moser-irreducible");
     }
