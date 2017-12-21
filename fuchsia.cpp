@@ -560,7 +560,9 @@ pfmatrix::pfmatrix(unsigned nrows, unsigned ncols, const symbol &x)
 pfmatrix::pfmatrix(const matrix &m, const symbol &x)
     : nrows(m.rows()), ncols(m.cols()), x(x)
 {
+    LOGME;
     for (unsigned i = 0; i < nrows; i++) {
+        logd("converting row {}", i);
         for (unsigned j = 0; j < ncols; j++) {
             // Caveat emptor! This algorithm may place
             // (non-canonical) zero cells into Ci values,
@@ -744,6 +746,7 @@ pfmatrix::with_constant_t(const matrix &L, const matrix &R) const
 pfmatrix
 pfmatrix::with_balance_t(const matrix &P, const ex &x1, const ex &x2) const
 {
+    LOGME;
     pfmatrix m(nrows, ncols, x);
     const matrix coP = ex_to_matrix(unit_matrix(P.rows()) - P);
     if (x1 == infinity) {
@@ -1269,6 +1272,10 @@ echelon_form_bareiss(matrix &m)
 }
 
 /* A vector (sub-)space represented by a set of basis vectors.
+ *
+ * The basis vectors are stored as row vectors, but can be viewed
+ * as either row or column vectors; hence the *_row and *_col
+ * set of functions.
  */
 struct vspace {
     matrix basis;
@@ -1331,6 +1338,7 @@ vspace::dim() const
 matrix
 vspace::basis_col(unsigned i) const
 {
+    assert(i < basis.rows());
     matrix v(basis.cols(), 1);
     for (unsigned j = 0; j < basis.cols(); j++) {
         v.let_op(j) = basis(i, j);
@@ -1341,6 +1349,7 @@ vspace::basis_col(unsigned i) const
 matrix
 vspace::basis_row(unsigned i) const
 {
+    assert(i < basis.rows());
     matrix v(1, basis.cols());
     for (unsigned j = 0; j < basis.cols(); j++) {
         v.let_op(j) = basis(i, j);
@@ -1369,13 +1378,20 @@ vspace::contains(const matrix &v) const
     unsigned p = 0;
     // Division-free subtraction of basis vectors from v.
     for (unsigned i = 0; i < basis.rows(); i++, p++) {
+        // Advance p to the first non-zero column of basis[i].
         for (;;) {
+            // This assertion should only fail if the normalize()
+            // was not called between add_rows() and contains().
+            assert(p < basis.cols());
             if (!basis(i, p).is_zero()) break;
             vv.let_op(p) = normal(vv.op(p));
+            // If vv has non-zero columns before p, it's not in
+            // the basis.
             if (!vv.op(p).is_zero())
                 return false;
             p++;
         }
+        // Subtract basis[i] from vv, if vv[p] != 0.
         const ex &vv_p = vv.op(p);
         if (!vv_p.is_zero()) {
             const ex b_ip = basis(i, p);
