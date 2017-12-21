@@ -1594,7 +1594,7 @@ dual_basis_spanning_left_invariant_subspace(const matrix &m, const matrix &u)
     vector<matrix> results;
     try {
         // Solve x*lev*u=1, and take x*lev as the result.
-        matrix x = matrix_solve_left(lev.mul(u), tmp, identity);
+        matrix x = matrix_solve_left(normal(lev.mul(u)), tmp, identity);
         for (unsigned i = 0; i < x.nops(); i++) {
             x.let_op(i) = x.op(i).subs(tmpz);
         }
