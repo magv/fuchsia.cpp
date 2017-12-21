@@ -1472,6 +1472,7 @@ eigenvectors_left(const matrix &m, const ex &eval)
 pair<matrix, vector<int>>
 jordan(const matrix &m)
 {
+    LOGME;
     assert(m.cols() == m.rows());
     unsigned n = m.rows();
     map<ex, unsigned, ex_is_less> eval2almul = eigenvalues(m);
@@ -1513,18 +1514,19 @@ jordan(const matrix &m)
                  * other vector is linearly dependent on it),
                  * and build a Jordan chain starting from v.
                  */
-                kk++;
-                xspace.add_rows(v.transpose());
                 for (unsigned r = 0; r < n; r++) {
                     q(r, idxq + i) = v.op(r);
                 }
                 for (int j = i - 1; j >= 0; j--) {
                     v = mm.mul(v);
-                    //assert(!xspace.contains(v));
-                    xspace.add_rows(v.transpose());
                     for (unsigned r = 0; r < n; r++) {
                         q(r, idxq + j) = v.op(r);
                     }
+                }
+                if (xspace.contains(v)) {
+                    // The last element of a chain is in xspace.
+                    // We'll skip this chain.
+                    continue;
                 }
                 /* Only rescale chains of length > 1; single
                  * eigenvectors are already well scaled by
@@ -1533,9 +1535,11 @@ jordan(const matrix &m)
                 if (i != 0) {
                     rescale_submatrix(q, 0, n, idxq, i+1);
                 }
+                xspace.add_rows(ex_to_matrix(sub_matrix(q, 0, n, idxq, i+1)).transpose());
                 xspace.normalize();
                 idxq += i + 1;
                 jcs.push_back(i + 1);
+                kk++;
             }
             assert(kk == kt);
         }
