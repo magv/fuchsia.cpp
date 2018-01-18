@@ -1694,6 +1694,29 @@ alg1(matrix l0, const vector<int> &jcs)
     return make_pair(s, d);
 }
 
+matrix
+matrix_inverse(const matrix m, unsigned algo = solve_algo::gauss)
+{
+    unsigned row = m.rows();
+    unsigned col = m.cols();
+    assert(row == col);
+    matrix identity = identity_matrix(row);
+    matrix vars(row,col);
+    for (unsigned r=0; r<row; ++r)
+        for (unsigned c=0; c<col; ++c)
+            vars(r,c) = symbol();
+    matrix sol(row,col);
+    try {
+        sol = m.solve(vars, identity, algo);
+    } catch (const std::runtime_error & e) {
+        if (e.what()==std::string("matrix::solve(): inconsistent linear system"))
+            throw (std::runtime_error("matrix::inverse(): singular matrix"));
+        else
+            throw;
+    }
+    return sol;
+}
+
 pair<matrix, matrix>
 alg1x(const matrix &a0, const matrix &a1)
 {
@@ -1704,7 +1727,7 @@ alg1x(const matrix &a0, const matrix &a1)
     // doesn't fail when dealing with un-normal zeros.
     const matrix &u = normal(ucs.first);
     const vector<int> &jcs = ucs.second;
-    matrix invu = u.inverse();
+    matrix invu = matrix_inverse(u);
     unsigned ncells = jcs.size();
     vector<int> jce(ncells);
     vector<int> jcb(ncells);
@@ -1745,7 +1768,7 @@ alg1x(const matrix &a0, const matrix &a1)
         }
     }
     matrix ut = u.mul(ie);
-    matrix invut = ut.inverse();
+    matrix invut = matrix_inverse(ie).mul(invu);
     int ns = 0;
     for (unsigned i = 0; i < ncells; i++) {
         if (s[i]) ns++;
