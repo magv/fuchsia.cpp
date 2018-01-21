@@ -550,7 +550,9 @@ struct pfmatrix {
 bool
 pfmatrix::key_is_less::operator ()(const key &k1, const key &k2) const
 {
-    return (k1.second < k2.second) || ex_is_less()(k1.first, k2.first);
+    if (k1.second < k2.second) return true;
+    if (k1.second > k2.second) return false;
+    return ex_is_less()(k1.first, k2.first);
 }
 
 pfmatrix::pfmatrix(unsigned nrows, unsigned ncols, const symbol &x)
@@ -596,7 +598,7 @@ matrix &
 pfmatrix::operator ()(const ex &p, int k)
 {
     const auto key = make_pair(p, k);
-    auto it = residues.find(key);
+    const auto it = residues.find(key);
     if (it != residues.end()) {
         return it->second;
     }
