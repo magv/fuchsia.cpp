@@ -74,22 +74,25 @@ main(int argc, char *argv[])
         tie(m, s) = load_matrix(argv[1], s);
         symbol x = ex_to<symbol>(s[var_x_name]);
         cout << "Matrix size: " << m.rows() << "x" << m.cols() << endl;
-        cout << "Matrix expansion:" << endl;
         pfmatrix pfm(m, x);
+        cout << "Matrix complexity: " << complexity(pfm) << endl;
+        cout << "Matrix expansion:" << endl;
         for (const auto kv : pfm.residues) {
             const auto &xi = kv.first.first;
             const auto &ki = kv.first.second;
             const auto &c = kv.second;
             if (c.is_zero_matrix()) continue;
             cout << "  pole of power " << ki << " at " << x << "=" << (ki >= 0 ? infinity : xi) << endl;
-            for (auto ev : eigenvalues(c)) {
+            cout << "    complexity: " << complexity(c) << endl;
+            for (auto ev : eigenvalues(c, true)) {
                 cout << "    e-value^" << ev.second << ": " << ev.first << endl;
             }
         }
         matrix c = normal(c0_infinity(pfm));
         if (!c.is_zero_matrix()) {
             cout << "  effective pole of power " << -1 << " at " << x << "=" << infinity << endl;
-            for (auto ev : eigenvalues(c)) {
+            cout << "    complexity: " << complexity(c) << endl;
+            for (auto ev : eigenvalues(c, true)) {
                 cout << "    e-value^" << ev.second << ": " << ev.first << endl;
             }
         }

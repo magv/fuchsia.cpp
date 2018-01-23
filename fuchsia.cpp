@@ -923,6 +923,7 @@ block_triangular_permutation::visit(int i)
 ex
 charpoly_by_blocks(const matrix &m, const ex &lambda)
 {
+    LOGME;
     block_triangular_permutation btp(m);
     matrix mm = btp.t().transpose().mul(m).mul(btp.t());
     ex cp = 1;
@@ -970,12 +971,13 @@ factor_twice_and_iter(const ex &e, F yield)
  * Throw an error, if unable.
  */
 map<ex, unsigned, ex_is_less>
-eigenvalues(const matrix &m)
+eigenvalues(const matrix &m, bool skip_roots=false)
 {
+    LOGME;
     map<ex, unsigned, ex_is_less> eigenvalues;
-    symbol lambda("λ");
+    symbol lambda("L");
     ex charpoly = charpoly_by_blocks(m, lambda);
-    factor_and_iter(charpoly,
+    factor_iter(factor_fixed(charpoly.numer()),
         [&](const ex &f, int k) {
             int deg = f.degree(lambda);
             if (deg == 0) {
@@ -988,7 +990,12 @@ eigenvalues(const matrix &m)
                 eigenvalues[ratcan(-c0/c1)] += k;
             }
             else {
-                throw runtime_error("eigenvalues(): can't solve equations of 2nd degree or higher");
+                if (skip_roots) {
+                    logi("skipping eigenvalues with roots: RootOf[({})^{}, {}]", f, k, lambda);
+                } else {
+                    loge("could not factor this part of charpoly (in {}): {}", lambda, f);
+                    throw fuchsia_error("eigenvalues(): eigenvalues contain roots of 2nd degree or higher");
+                }
             }
         });
     return eigenvalues;
@@ -1579,7 +1586,7 @@ dual_basis_spanning_left_invariant_subspace(const matrix &m, const matrix &u)
     LOGME;
     matrix mt = m.transpose();
     matrix lev(0, m.rows()); // left (row-)eigenvectors of m
-    for (const auto &ev : eigenvalues(mt)) {
+    for (const auto &ev : eigenvalues(mt, true)) {
         const auto &eval = ev.first;
         vspace vs = eigenspace(mt, eval);
         ((matrix_hack*)&lev)->append_rows(vs.basis_rows());
