@@ -530,7 +530,7 @@ struct pfmatrix {
     pfmatrix(unsigned nrows, unsigned ncols, const symbol &x);
     pfmatrix(const matrix &m, const symbol &x);
     matrix &operator ()(const ex &p, int k);
-    matrix to_matrix();
+    matrix to_matrix() const;
     void normalize();
     // M += C*(x-pi)^ki
     void add(const matrix &C, const ex &p1, int k1);
@@ -606,7 +606,7 @@ pfmatrix::operator ()(const ex &p, int k)
 }
 
 matrix
-pfmatrix::to_matrix()
+pfmatrix::to_matrix() const
 {
     matrix m(nrows, ncols);
     for (const auto &kv : residues) {
