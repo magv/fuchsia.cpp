@@ -1845,6 +1845,22 @@ balance_t(const matrix &p, const ex &x1, const ex &x2, const ex &x)
     }
 }
 
+/* This function is needed because matrix::rank() uses Bareiss
+ * elimination, which is too slow for our sparse matrices.
+ */
+unsigned
+matrix_rank(const matrix &m)
+{
+	matrix mm = m;
+    echelon_form_gauss(mm);
+	unsigned r = mm.rows()*mm.cols();
+	while (r--) {
+		if (!mm.op(r).is_zero())
+			return 1+r/mm.cols();
+	}
+	return 0;
+}
+
 pair<pfmatrix, ex>
 fuchsify(const pfmatrix &m)
 {
@@ -1860,31 +1876,45 @@ fuchsify(const pfmatrix &m)
     struct Reduction { ex pi; ex pj; matrix p; pfmatrix pfm; };
     for (;;) {
         logd("Current matrix complexity: {}", complexity(pfm));
-        logd("Current matrix expansion:");
-        for (const auto kv : pfm.residues) {
-            const auto &xi = kv.first.first;
-            const auto &ki = kv.first.second;
-            const auto &c = kv.second;
-            if (c.is_zero_matrix()) continue;
-            logd("- pole of order {} at {}, complexity={}", ki, xi, complexity(c));
-        }
-        // Compute the highest powers of decomposition at each
-        // singular point (including infinity).
+        logd("Current expansion:");
+        // Compute the highest (most distant from -1) powers
+        // of decomposition at each singular point (including
+        // infinity), place them in poincare_map.
         map<ex, int, ex_is_less> poincare_map;
+        matrix c0inf = normal(c0_infinity(pfm));
+        if (!c0inf.is_zero_matrix()) {
+            poincare_map[infinity] = -1;
+        }
         for (auto &kv : pfm.residues) {
             const auto &pi = kv.first.first;
             const auto &ki = kv.first.second;
             const auto &ci = kv.second;
-            if (ci.is_zero_matrix()) {
-                continue;
-            }
+            if (ci.is_zero_matrix()) continue;
+            logd("- residue with power {} at {}={}, complexity={}",
+                    ki, pfm.x, pi, complexity(ci));
             if (ki <= -1) {
-                if (poincare_map.find(pi) == poincare_map.end()) poincare_map[pi] = -1;
+                if (poincare_map.find(pi) == poincare_map.end())
+                    poincare_map[pi] = -1;
                 poincare_map[pi] = min(poincare_map[pi], ki);
             }
-            if (ki >= -1) {
-                if (poincare_map.find(infinity) == poincare_map.end()) poincare_map[infinity] = -1;
+            if (ki > -1) {
+                if (poincare_map.find(infinity) == poincare_map.end())
+                    poincare_map[infinity] = -1;
                 poincare_map[infinity] = max(poincare_map[infinity], ki);
+            }
+        }
+        logd("Current poles:");
+        for (auto &kvi : poincare_map) {
+            const auto &xi = kvi.first;
+            const auto &ki = kvi.second;
+            const auto c = (xi != infinity) ? pfm(xi, ki) : (ki != -1) ? pfm(0, ki) : c0inf;
+            if (c.is_zero_matrix()) continue;
+            if (abs(ki + 1) > 0) {
+                logd("- pole with power {} at {}={}, complexity={}, residue rank={}",
+                        ki, pfm.x, xi, complexity(c), matrix_rank(c));
+            } else {
+                logd("- pole with power {} at {}={}, complexity={}",
+                        ki, pfm.x, xi, complexity(c));
             }
         }
         /* List all possible reductions between each pair of
@@ -1897,10 +1927,10 @@ fuchsify(const pfmatrix &m)
             const auto &pi = kvi.first;
             const auto &ki = kvi.second;
             if (ki == -1) continue;
-            done = false;
-            const auto a0 = (pi == infinity) ? pfm(0, ki) : pfm(pi, ki);
+            const auto a0 = (pi != infinity) ? pfm(pi, ki) : pfm(0, ki);
             if (a0.is_zero_matrix()) continue;
-            const auto a1 = (pi == infinity) ? (ki == 0) ? c0_infinity(pfm) : pfm(0, ki - 1) : pfm(pi, ki + 1);
+            done = false;
+            const auto a1 = (pi != infinity) ? pfm(pi, ki + 1) : (ki != 0) ? pfm(0, ki - 1) : c0inf;
             const auto uv = alg1x(a0, a1);
             for (auto &kvj : poincare_map) {
                 const auto &pj = kvj.first;
@@ -1911,9 +1941,9 @@ fuchsify(const pfmatrix &m)
                  * with lower.
                  */
                 if (abs(kj + 1) >= abs(ki + 1)) continue;
-                //const auto b0 = (pj == infinity) ? pfm(0, kj) : pfm(pj, kj);
-                const auto b0 = (pj == infinity) ? (kj == -1) ? c0_infinity(pfm) : pfm(0, kj) : pfm(pj, kj);
+                const auto b0 = (pj != infinity) ? pfm(pj, kj) : (kj != -1) ? pfm(0, kj) : c0inf;
                 if (b0.is_zero_matrix()) continue;
+                logi("looking at reductions between {} and {}", pi, pj);
                 for (auto dualb : dual_basis_spanning_left_invariant_subspace(b0, uv.first)) {
                     auto p = uv.first.mul(dualb);
                     reductions.push_back(Reduction {
@@ -1943,11 +1973,12 @@ fuchsify(const pfmatrix &m)
                     mini = i;
                     minc = c;
                 }
+                logi("reduction between {} and {} can give complexity {}",
+                        reductions[i].pi, reductions[i].pj, c);
             }
             Reduction &r = reductions[mini];
             logi("use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
-            logi("new complexity is: {}", minc);
-            t = t * balance_t(r.p, r.pi, r.pj, pfm.x);
+            t = t*balance_t(r.p, r.pi, r.pj, pfm.x);
             pfm = r.pfm;
         } else {
             logd("* no good reductions found, looking at the bad ones");
