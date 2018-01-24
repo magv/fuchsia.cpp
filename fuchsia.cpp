@@ -955,18 +955,6 @@ determinant_by_blocks(const matrix &m)
     return res;
 }
 
-template<typename F> void
-factor_twice_and_iter(const ex &e, F yield)
-{
-    factor_iter(factor(e),
-        [&](const ex &f1, int k1) {
-            factor_iter(factor(f1),
-                [&](const ex &f2, int k2) {
-                    yield(f2, k1*k2);
-                });
-        });
-}
-
 /* Find and return eigenvalues of a matrix.
  * Throw an error, if unable.
  */
