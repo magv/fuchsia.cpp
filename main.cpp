@@ -15,6 +15,11 @@ usage()
         "    fuchsify [-x <name>] [-m <path>] [-t <path>] <matrix>\n"
         "        find a transformation that will transform a given matrix\n"
         "        into Fuchsian form\n"
+        "\n"
+        "    normalize [-x <name>] [-e <name>] [-m <path>] [-t <path>] <matrix>\n"
+        "        find a transformation that will transform a given Fuchsian\n"
+        "        matrix into normalized form\n"
+        "\n"
         "    sort [-m <path>] [-t <path>] <matrix>\n"
         "        find a block-triangular form of the given matrix\n"
         "\n"
@@ -112,6 +117,17 @@ main(int argc, char *argv[])
         symbol x = ex_to<symbol>(s[var_x_name]);
         pfmatrix pfm(m, x);
         auto r = fuchsify(pfm);
+        matrix_m = r.first.to_matrix();
+        matrix_t = ex_to_matrix(r.second);
+    }
+    else if ((argc == 2) && !strcmp(argv[0], "normalize")) {
+        symtab s;
+        matrix m;
+        tie(m, s) = load_matrix(argv[1], s);
+        symbol x = ex_to<symbol>(s[var_x_name]);
+        symbol eps = ex_to<symbol>(s[var_eps_name]);
+        pfmatrix pfm(m, x);
+        auto r = normalize(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = ex_to_matrix(r.second);
     }

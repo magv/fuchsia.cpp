@@ -2007,6 +2007,144 @@ fuchsify(const pfmatrix &m)
     return make_pair(pfm, t);
 }
 
+/* Normalization
+ * ============================================================
+ */
+
+ex
+dot(const matrix &v1, const matrix &v2)
+{
+    assert(v1.nops() == v2.nops());
+    ex res = 0;
+    for (unsigned i = 0; i < v1.nops(); i++) {
+        res += v1.op(i)*v2.op(i);
+    }
+    return res;
+}
+
+matrix
+cross(const matrix &v1, const matrix &v2)
+{
+    matrix res(v1.nops(), v2.nops());
+    for (unsigned i = 0; i < v1.nops(); i++) {
+        const ex &a = v1.op(i);
+        for (unsigned j = 0; j < v2.nops(); j++) {
+            res(i, j) = a*v2.op(j);
+        }
+    }
+    return res;
+}
+
+pair<pfmatrix, ex>
+normalize(const pfmatrix &m, const symbol &eps)
+{
+    LOGME;
+    pfmatrix pfm = m;
+    ex t = unit_matrix(m.nrows, m.ncols);
+    //map<ex, map<ex, unsigned, ex_is_less>, ex_is_less> evalues;
+    for (;;) {
+        logd("Current matrix complexity: {}", complexity(pfm));
+        logd("Current expansion:");
+        struct Residue { ex pi; matrix ci; ex eval; vector<matrix> evecs; };
+        vector<Residue> residues1, residues2;
+        for (const auto &kv : pfm.residues) {
+            const auto &pi = kv.first.first;
+            const auto &ki = kv.first.second;
+            const auto &ci = kv.second;
+            if (ci.is_zero_matrix()) continue;
+            logd("- residue with power {} at {}={}, complexity={}",
+                    ki, pfm.x, pi, complexity(ci));
+            if (ki != -1) {
+                throw fuchsia_error("normalize(): the matrix is not Fuchsian");
+            }
+            for (const auto kv : eigenvalues(ci, true)) {
+                const auto &eval = kv.first;
+                const auto &almul = kv.second;
+                logd("  * eigenvalue^{}: {}", almul, eval);
+                ex ev0 = eval.subs(exmap{{eps, 0}}, subs_options::no_pattern);
+                if (!is_a<numeric>(ev0)) {
+                    logi("this eigenvalue can not be normalized: {}", eval);
+                    throw fuchsia_error("normalize(): unsupported form of eigenvalue");
+                }
+                numeric ev0n = ex_to<numeric>(ev0);
+                if (ev0n < numeric(-1, 2)) {
+                    residues1.push_back(Residue { pi, ci, eval, eigenvectors_right(ci, eval) });
+                }
+                if (numeric(1, 2) <= ev0n) {
+                    residues2.push_back(Residue { pi, ci, eval, eigenvectors_left(ci, eval) });
+                }
+            }
+        }
+        matrix c0inf = normal(c0_infinity(pfm));
+        if (!c0inf.is_zero_matrix()) {
+            logd("- effective residue with power {} at {}={}, complexity={}",
+                    -1, pfm.x, infinity, complexity(c0inf));
+            for (const auto kv : eigenvalues(c0inf, true)) {
+                const auto &eval = kv.first;
+                const auto &almul = kv.second;
+                logd("  * eigenvalue^{}: {}", almul, eval);
+                ex ev0 = eval.subs(exmap{{eps, 0}}, subs_options::no_pattern);
+                if (!is_a<numeric>(ev0)) {
+                    logi("this eigenvalue can not be normalized: {}", eval);
+                    throw fuchsia_error("normalize(): unsupported form of eigenvalue");
+                }
+                numeric ev0n = ex_to<numeric>(ev0);
+                if (ev0n < numeric(-1, 2)) {
+                    residues1.push_back(Residue { infinity, c0inf, eval, eigenvectors_right(c0inf, eval) });
+                }
+                if (numeric(1, 2) <= ev0n) {
+                    residues2.push_back(Residue { infinity, c0inf, eval, eigenvectors_left(c0inf, eval) });
+                }
+            }
+        }
+        if (residues1.size() + residues2.size() == 0) break;
+        logd("{} more eigevalues to normalize", residues1.size() + residues2.size());
+        struct Reduction { ex pi; ex pj; matrix p; pfmatrix pfm; };
+        vector<Reduction> reductions;
+        for (const auto &r1 : residues1) {
+            for (const auto evec1 : r1.evecs) {
+                for (const auto &r2 : residues2) {
+                    for (const auto evec2 : r2.evecs) {
+                        ex scale = normal(dot(evec1, evec2));
+                        if (scale.is_zero()) continue;
+                        matrix p = normal(cross(evec1, evec2).mul_scalar(1/scale));
+                        reductions.push_back(Reduction {
+                            r1.pi,
+                            r2.pi,
+                            p,
+                            pfm.with_balance_t(p, r1.pi, r2.pi)
+                        });
+                    }
+                }
+            }
+        }
+        if (reductions.size() > 0) {
+            size_t mini = 0;
+            logi("{} suitable reductions found", reductions.size());
+            int minc = complexity(reductions[0].pfm);
+            logi("reduction between {} and {} can give complexity {}",
+                    reductions[0].pi, reductions[0].pj, minc);
+            for (size_t i = 1; i < reductions.size(); i++) {
+                int c = complexity(reductions[i].pfm);
+                if (c < minc) {
+                    mini = i;
+                    minc = c;
+                }
+                logi("reduction between {} and {} can give complexity {}",
+                        reductions[i].pi, reductions[i].pj, c);
+            }
+            Reduction &r = reductions[mini];
+            logi("use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
+            t = t*balance_t(r.p, r.pi, r.pj, pfm.x);
+            pfm = r.pfm;
+        } else {
+            loge("no suitable reductions found");
+            throw fuchsia_error("normalize(): no suitable reductions found");
+        }
+    }
+    return make_pair(pfm, t);
+}
+
 /* Logging formatters
  * ============================================================
  */
