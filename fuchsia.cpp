@@ -1816,7 +1816,7 @@ int
 complexity(const pfmatrix &pfm)
 {
     int c = 0;
-    for (const auto kv : pfm.residues) {
+    for (const auto &kv : pfm.residues) {
         const auto &pi = kv.first.first;
         const auto &ci = kv.second;
         c += complexity(pi);
@@ -1880,7 +1880,7 @@ fuchsify(const pfmatrix &m)
         if (!c0inf.is_zero_matrix()) {
             poincare_map[infinity] = -1;
         }
-        for (auto &kv : pfm.residues) {
+        for (const auto &kv : pfm.residues) {
             const auto &pi = kv.first.first;
             const auto &ki = kv.first.second;
             const auto &ci = kv.second;
