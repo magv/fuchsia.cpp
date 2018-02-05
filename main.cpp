@@ -12,6 +12,9 @@ usage()
         "    show [-x <name>] <matrix>\n"
         "        show a description of a given matrix\n"
         "\n"
+        "    reduce [-x <name>] [-e <name>] [-m <path>] [-t <path>] <matrix>\n"
+        "        find an epsilon form of the given matrix\n"
+        "\n"
         "    fuchsify [-x <name>] [-m <path>] [-t <path>] <matrix>\n"
         "        find a transformation that will transform a given matrix\n"
         "        into Fuchsian form\n"
@@ -145,6 +148,19 @@ main(int argc, char *argv[])
         auto r = factorize(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = ex_to_matrix(r.second);
+    }
+    else if ((argc == 2) && !strcmp(argv[0], "reduce")) {
+        symtab s;
+        matrix m;
+        tie(m, s) = load_matrix(argv[1], s);
+        symbol x = ex_to<symbol>(s[var_x_name]);
+        symbol eps = ex_to<symbol>(s[var_eps_name]);
+        pfmatrix pfm(m, x);
+        auto r1 = fuchsify(pfm);
+        auto r2 = normalize(r1.first, eps);
+        auto r3 = factorize(r2.first, eps);
+        matrix_m = r3.first.to_matrix();
+        matrix_t = ex_to_matrix(r1.second * r2.second * r3.second);
     }
     else if ((argc >= 3) && !strcmp(argv[0], "transform")) {
         symtab s;
