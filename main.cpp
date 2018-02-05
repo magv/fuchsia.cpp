@@ -23,7 +23,7 @@ usage()
         "    sort [-m <path>] [-t <path>] <matrix>\n"
         "        find a block-triangular form of the given matrix\n"
         "\n"
-        "    transform [-x <name>] [-m <path>] <matrix> <transform>\n"
+        "    transform [-x <name>] [-m <path>] <matrix> <transform> ...\n"
         "        transform a given matrix using a given transformation\n"
         "\n"
         "    changevar [-x <name>] [-y <name>] [-m <path>] <matrix> <expr>\n"
@@ -131,13 +131,17 @@ main(int argc, char *argv[])
         matrix_m = r.first.to_matrix();
         matrix_t = ex_to_matrix(r.second);
     }
-    else if ((argc == 3) && !strcmp(argv[0], "transform")) {
+    else if ((argc >= 3) && !strcmp(argv[0], "transform")) {
         symtab s;
         matrix m, t;
         tie(m, s) = load_matrix(argv[1], s);
-        tie(t, s) = load_matrix(argv[2], s);
         symbol x = ex_to<symbol>(s[var_x_name]);
-        pfmatrix pfm(t.inverse().mul(m.mul(t).sub(ex_to_matrix(t.diff(x)))), x);
+        for (int i = 2; i < argc; i++) {
+            matrix t;
+            tie(t, s) = load_matrix(argv[i], s);
+            m = matrix_inverse(t).mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
+        }
+        pfmatrix pfm(m, x);
         matrix_m = pfm.to_matrix();
     }
     else if ((argc == 3) && !strcmp(argv[0], "changevar")) {
