@@ -34,8 +34,7 @@ usage()
         "        transform a given matrix using a given transformation\n"
         "\n"
         "    changevar [-x <name>] [-y <name>] [-m <path>] <matrix> <expr>\n"
-        "        transform a given matrix by susbtituting free variable\n"
-        "        by a given expression\n"
+        "        perform a change of variable from x to y, such that x=f(y)\n"
         "\n"
         "Options:\n"
         "    -h          show this help message\n"
@@ -76,17 +75,18 @@ main(int argc, char *argv[])
     argv += optind;
     matrix matrix_m(0, 0);
     matrix matrix_t(0, 0);
+    symbol x(var_x_name);
+    symbol y(var_y_name);
+    symbol eps(var_eps_name);
+    symtab vars = {{var_x_name, x}, {var_y_name, y}, {var_eps_name, eps}};
     if ((argc == 1) && !strcmp(argv[0], "help")) {
         usage();
         return 0;
     }
     else if ((argc == 2) && !strcmp(argv[0], "show")) {
-        symtab s;
-        matrix m;
-        tie(m, s) = load_matrix(argv[1], s);
-        symbol x = ex_to<symbol>(s[var_x_name]);
-        cout << "Matrix size: " << m.rows() << "x" << m.cols() << endl;
-        pfmatrix pfm(m, x);
+        auto ms = load_matrix(argv[1], vars);
+        cout << "Matrix size: " << ms.first.rows() << "x" << ms.first.cols() << endl;
+        pfmatrix pfm(ms.first, x);
         cout << "Matrix complexity: " << complexity(pfm) << endl;
         cout << "Matrix expansion:" << endl;
         for (const auto kv : pfm.residues) {
@@ -110,52 +110,35 @@ main(int argc, char *argv[])
         }
     }
     else if ((argc == 2) && !strcmp(argv[0], "sort")) {
-        symtab s;
-        matrix m;
-        tie(m, s) = load_matrix(argv[1], s);
-        block_triangular_permutation btp(m);
-        matrix_m = btp.t().transpose().mul(m).mul(btp.t());
+        auto ms = load_matrix(argv[1], vars);
+        block_triangular_permutation btp(ms.first);
+        matrix_m = btp.t().transpose().mul(ms.first).mul(btp.t());
         matrix_t = btp.t();
     }
     else if ((argc == 2) && !strcmp(argv[0], "fuchsify")) {
-        symtab s;
-        matrix m;
-        tie(m, s) = load_matrix(argv[1], s);
-        symbol x = ex_to<symbol>(s[var_x_name]);
-        pfmatrix pfm(m, x);
+        auto ms = load_matrix(argv[1], vars);
+        pfmatrix pfm(ms.first, x);
         auto r = fuchsify(pfm);
         matrix_m = r.first.to_matrix();
         matrix_t = ex_to_matrix(r.second);
     }
     else if ((argc == 2) && !strcmp(argv[0], "normalize")) {
-        symtab s;
-        matrix m;
-        tie(m, s) = load_matrix(argv[1], s);
-        symbol x = ex_to<symbol>(s[var_x_name]);
-        symbol eps = ex_to<symbol>(s[var_eps_name]);
-        pfmatrix pfm(m, x);
+        auto ms = load_matrix(argv[1], vars);
+        pfmatrix pfm(ms.first, x);
         auto r = normalize(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = ex_to_matrix(r.second);
     }
     else if ((argc == 2) && !strcmp(argv[0], "factorize")) {
-        symtab s;
-        matrix m;
-        tie(m, s) = load_matrix(argv[1], s);
-        symbol x = ex_to<symbol>(s[var_x_name]);
-        symbol eps = ex_to<symbol>(s[var_eps_name]);
-        pfmatrix pfm(m, x);
+        auto ms = load_matrix(argv[1], vars);
+        pfmatrix pfm(ms.first, x);
         auto r = factorize(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = ex_to_matrix(r.second);
     }
     else if ((argc == 2) && !strcmp(argv[0], "reduce")) {
-        symtab s;
-        matrix m;
-        tie(m, s) = load_matrix(argv[1], s);
-        symbol x = ex_to<symbol>(s[var_x_name]);
-        symbol eps = ex_to<symbol>(s[var_eps_name]);
-        pfmatrix pfm(m, x);
+        auto ms = load_matrix(argv[1], vars);
+        pfmatrix pfm(ms.first, x);
         auto r1 = fuchsify(pfm);
         auto r2 = normalize(r1.first, eps);
         auto r3 = factorize(r2.first, eps);
@@ -163,28 +146,21 @@ main(int argc, char *argv[])
         matrix_t = ex_to_matrix(r1.second * r2.second * r3.second);
     }
     else if ((argc >= 3) && !strcmp(argv[0], "transform")) {
-        symtab s;
-        matrix m, t;
-        tie(m, s) = load_matrix(argv[1], s);
-        symbol x = ex_to<symbol>(s[var_x_name]);
+        matrix m;
+        tie(m, vars) = load_matrix(argv[1], vars);
         for (int i = 2; i < argc; i++) {
             matrix t;
-            tie(t, s) = load_matrix(argv[i], s);
+            tie(t, vars) = load_matrix(argv[i], vars);
             m = matrix_inverse(t).mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
         }
         pfmatrix pfm(m, x);
         matrix_m = pfm.to_matrix();
     }
     else if ((argc == 3) && !strcmp(argv[0], "changevar")) {
-        auto ms = load_matrix(argv[1], symtab());
-        matrix m = ms.first;
-        symtab s = ms.second;
-        parser reader(s);
+        auto ms = load_matrix(argv[1], vars);
+        parser reader(ms.second);
         auto xsubs = reader(argv[2]);
-        s = reader.get_syms();
-        symbol x = ex_to<symbol>(s[var_x_name]);
-        symbol y = ex_to<symbol>(s[var_y_name]);
-        matrix m2 = ex_to_matrix(m.subs(exmap{{x, xsubs}})).mul_scalar(xsubs.diff(y));
+        matrix m2 = ex_to_matrix(ms.first.subs(exmap{{x, xsubs}})).mul_scalar(xsubs.diff(y));
         matrix_m = pfmatrix(m2, y).to_matrix();
     }
     else if (argc == 0) {
