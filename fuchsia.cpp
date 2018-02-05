@@ -2133,6 +2133,70 @@ normalize(const pfmatrix &m, const symbol &eps)
     return make_pair(pfm, t);
 }
 
+/* Factorization
+ * ============================================================
+ */
+
+pair<pfmatrix, ex>
+factorize(const pfmatrix &m, const symbol &eps)
+{
+    LOGME;
+    lst tmp;
+    for (unsigned i = 0; i < m.nrows*m.nrows; i++) {
+        tmp.append(symbol());
+    }
+    matrix t = matrix(m.nrows, m.nrows, tmp);
+    symbol mu("MU");
+    lst eqs;
+    for (const auto &kv : m.residues) {
+        //const auto &pi = kv.first.first;
+        const auto &ki = kv.first.second;
+        assert(ki == -1);
+        const auto &ci = kv.second;
+        if (ci.is_zero_matrix()) continue;
+        matrix ci_eps = ci.mul_scalar(1/eps);
+        matrix ci_mu(ci_eps.rows(), ci_eps.cols());
+        for (unsigned i = 0; i < ci_eps.nops(); i++) {
+            ci_mu.let_op(i) = ci_eps.op(i).subs(exmap{{eps, mu}});
+        }
+        matrix eq = ci_eps.mul(t).sub(t.mul(ci_mu));
+        for (unsigned i = 0; i < eq.nops(); i++) {
+            eqs.append(eq.op(i) == 0);
+        }
+    }
+    logd("solving {} linear equations in {} variables", eqs.nops(), tmp.nops());
+    ex sol = lsolve(eqs, tmp, solve_algo::gauss);
+    logd("found a solution");
+    for (unsigned i = 0; i < t.nops(); i++) {
+        t.let_op(i) = t.op(i).subs(sol);
+    }
+    tmp.append(mu);
+    for (int range = 0;; range += 1 + range/16) {
+        logd("substituting free variables, range={}", range);
+        try {
+            exmap map;
+            for (unsigned i = 0; i < tmp.nops(); i++) {
+                map[tmp.op(i)] = (range == 0) ? 0 : rand() % (2*range+1) - range - 1;
+            }
+            matrix st(t.rows(), t.cols());
+            for (unsigned i = 0; i < t.nops(); i++) {
+                st.let_op(i) = normal(t.op(i).subs(map));
+            }
+            matrix invst = normal(matrix_inverse(st));
+            return make_pair(m.with_constant_t(invst, st), st);
+        } catch (const pole_error & e) {
+            logd("got error: {}; retrying", e.what());
+            continue;
+        } catch (const std::runtime_error & e) {
+            if (e.what() == std::string("matrix::inverse(): singular matrix")) {
+                logd("got singular matrix; retrying");
+                continue;
+            }
+            throw;
+        }
+    }
+}
+
 /* Logging formatters
  * ============================================================
  */
