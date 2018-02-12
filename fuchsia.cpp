@@ -1943,7 +1943,7 @@ fuchsify(const pfmatrix &m)
                 if (abs(kj + 1) >= abs(ki + 1)) continue;
                 const auto b0 = (pj != infinity) ? pfm(pj, kj) : (kj != -1) ? pfm(0, kj) : c0inf;
                 if (b0.is_zero_matrix()) continue;
-                logi("looking at reductions between {} and {}", pi, pj);
+                logi("Looking at reductions between {} and {}", pi, pj);
                 for (auto dualb : dual_basis_spanning_left_invariant_subspace(b0, uv.first)) {
                     auto p = uv.first.mul(dualb);
                     reductions.push_back(Reduction {
@@ -1967,13 +1967,15 @@ fuchsify(const pfmatrix &m)
             // Find and apply the smallest reduction.
             size_t mini = 0;
             int minc = complexity(reductions[0].pfm);
+            logi("Reduction between {} and {} can give complexity {}",
+                    reductions[0].pi, reductions[0].pj, minc);
             for (size_t i = 1; i < reductions.size(); i++) {
                 int c = complexity(reductions[i].pfm);
                 if (c < minc) {
                     mini = i;
                     minc = c;
                 }
-                logi("reduction between {} and {} can give complexity {}",
+                logi("Reduction between {} and {} can give complexity {}",
                         reductions[i].pi, reductions[i].pj, c);
             }
             Reduction &r = reductions[mini];
@@ -2125,9 +2127,9 @@ normalize(const pfmatrix &m, const symbol &eps)
         }
         if (reductions.size() > 0) {
             size_t mini = 0;
-            logi("{} suitable reductions found", reductions.size());
+            logd("{} suitable reductions found", reductions.size());
             int minc = complexity(reductions[0].pfm);
-            logi("reduction between {} and {} can give complexity {}",
+            logi("Reduction between {} and {} can give complexity {}",
                     reductions[0].pi, reductions[0].pj, minc);
             for (size_t i = 1; i < reductions.size(); i++) {
                 int c = complexity(reductions[i].pfm);
@@ -2135,7 +2137,7 @@ normalize(const pfmatrix &m, const symbol &eps)
                     mini = i;
                     minc = c;
                 }
-                logi("reduction between {} and {} can give complexity {}",
+                logi("Reduction between {} and {} can give complexity {}",
                         reductions[i].pi, reductions[i].pj, c);
             }
             Reduction &r = reductions[mini];
