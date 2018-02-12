@@ -1999,6 +1999,18 @@ fuchsify(const pfmatrix &m)
     return make_pair(pfm, t);
 }
 
+bool
+is_fuchsian(const pfmatrix &pfm)
+{
+    for (const auto &kv : pfm.residues) {
+        const auto &ki = kv.first.second;
+        const auto &ci = kv.second;
+        if (ci.is_zero_matrix()) continue;
+        if (ki != -1) return false;
+    }
+    return true;
+}
+
 /* Normalization
  * ============================================================
  */
@@ -2137,6 +2149,38 @@ normalize(const pfmatrix &m, const symbol &eps)
     return make_pair(pfm, t);
 }
 
+bool
+is_normal(const pfmatrix &pfm, const symbol &eps)
+{
+    for (const auto &kv : pfm.residues) {
+        const auto &ki = kv.first.second;
+        const auto &ci = kv.second;
+        if (ci.is_zero_matrix()) continue;
+        if (ki != -1) return false;
+        for (const auto kv : eigenvalues(ci)) {
+            const auto &eval = kv.first;
+            ex ev0 = eval.subs(exmap{{eps, 0}}, subs_options::no_pattern);
+            if (!is_a<numeric>(ev0)) return false;
+            numeric ev0n = ex_to<numeric>(ev0);
+            if (ev0n < numeric(-1, 2)) return false;
+            if (numeric(1, 2) <= ev0n) return false;
+        }
+    }
+    matrix c0inf = normal(c0_infinity(pfm));
+    if (!c0inf.is_zero_matrix()) {
+        for (const auto kv : eigenvalues(c0inf)) {
+            const auto &eval = kv.first;
+            ex ev0 = eval.subs(exmap{{eps, 0}}, subs_options::no_pattern);
+            if (!is_a<numeric>(ev0)) return false;
+            numeric ev0n = ex_to<numeric>(ev0);
+            if (ev0n < numeric(-1, 2)) return false;
+            if (numeric(1, 2) <= ev0n) return false;
+        }
+    }
+    return true;
+}
+
+
 /* Factorization
  * ============================================================
  */
@@ -2199,6 +2243,22 @@ factorize(const pfmatrix &m, const symbol &eps)
             throw;
         }
     }
+    assert(false);
+}
+
+bool
+is_factorized(const pfmatrix &pfm, const symbol &eps)
+{
+    for (const auto &kv : pfm.residues) {
+        const auto &ci = kv.second;
+        if (ci.is_zero_matrix()) continue;
+        exmap map = {{eps, 2*eps}};
+        for (unsigned i = 0; i < ci.nops(); i++) {
+            const ex &e = ci.op(i);
+            if (!normal(e.subs(map) - e*2).is_zero()) return false;
+        }
+    }
+    return true;
 }
 
 /* Logging formatters
