@@ -184,9 +184,40 @@ identity_matrix(unsigned n)
 }
 
 matrix
+glue_matrix(const ex &a, const ex &b, unsigned offset)
+{
+    matrix aa = ex_to_matrix(a);
+    matrix bb = ex_to_matrix(b);
+    for (unsigned r = 0; r < bb.rows(); r++) {
+        for (unsigned c = 0; c < bb.cols(); c++) {
+            aa(offset + r, offset + c) = bb(r, c);
+        }
+    }
+    return aa;
+}
+
+matrix
 matrix_solve_left(const matrix &m, const matrix &vars, const matrix &rhs)
 {
     return m.transpose().solve(vars.transpose(), rhs.transpose()).transpose();
+}
+
+template <typename F> void
+matrix_map_inplace(matrix &m, F f)
+{
+    for (unsigned i = 0; i < m.nops(); i++) {
+        m.let_op(i) = f(m.op(i));
+    }
+}
+
+template <typename F> matrix
+matrix_map(const matrix &m, F f)
+{
+    matrix r(m.rows(), m.cols());
+    for (unsigned i = 0; i < m.nops(); i++) {
+        r.let_op(i) = f(m.op(i));
+    }
+    return r;
 }
 
 /* Infinity object.
@@ -320,11 +351,7 @@ ratcan(const ex &e)
 matrix
 ratcan(const matrix &m)
 {
-    matrix r(m.rows(), m.cols());
-    for (unsigned i = 0; i < m.nops(); i++) {
-        r.let_op(i) = ratcan(m.op(i));
-    }
-    return r;
+    return matrix_map(m, [&](auto &&e) { return ratcan(e); });
 }
 
 /* Normal form for matrices of rational expressions.
@@ -335,11 +362,7 @@ ratcan(const matrix &m)
 matrix
 normal(const matrix &m)
 {
-    matrix r(m.rows(), m.cols());
-    for (unsigned i = 0; i < m.nops(); i++) {
-        r.let_op(i) = normal(m.op(i));
-    }
-    return r;
+    return matrix_map(m, [&](auto &&e) { return normal(e); });
 }
 
 /* Iterate through factors of e, call yield(f, k) for each
@@ -535,6 +558,7 @@ struct pfmatrix {
     pfmatrix(const matrix &m, const symbol &x);
     matrix &operator ()(const ex &p, int k);
     matrix to_matrix() const;
+    pfmatrix block(unsigned offset, unsigned size) const;
     void normalize();
     // M += C*(x-pi)^ki
     void add(const matrix &C, const ex &p1, int k1);
@@ -548,7 +572,10 @@ struct pfmatrix {
     pfmatrix with_constant_t(const matrix &T) const;
     // M' = L M R
     pfmatrix with_constant_t(const matrix &L, const matrix &R) const;
+    // M' = B(x2, x1) M B(x1, x2) - P/(x - x2) + P/(x - x1)
     pfmatrix with_balance_t(const matrix &P, const ex &x1, const ex &x2) const;
+    // M' = (1 - (x - p)^k D) M (1 + (x - p)^k D) - k (x - p)^(k-1) D
+    pfmatrix with_off_diagonal_t(const matrix &D, const ex &p, int k) const;
 };
 
 bool
@@ -619,6 +646,21 @@ pfmatrix::to_matrix() const
         const auto &Ci = kv.second;
         assert((ki < 0) || pi.is_zero());
         m = m.add(Ci.mul_scalar(pow(x - pi, ki)));
+    }
+    return m;
+}
+
+pfmatrix
+pfmatrix::block(unsigned offset, unsigned size) const
+{
+    pfmatrix m(size, size, x);
+    for (auto &kv : residues) {
+        const auto &pi = kv.first.first;
+        const auto &ki = kv.first.second;
+        const auto &ci = kv.second;
+        matrix b = ex_to<matrix>(sub_matrix(ci, offset, size, offset, size));
+        if (!b.is_zero_matrix())
+            m(pi, ki) = b;
     }
     return m;
 }
@@ -836,6 +878,173 @@ with_balance_t(const matrix &m, const matrix &P, const ex &x1, const ex &x2, con
     return ex_to_matrix((coP + 1/k*P)*m*(coP + k*P) - d/k*P);
 }
 
+pfmatrix
+pfmatrix::with_off_diagonal_t(const matrix &D, const ex &p, int k) const
+{
+    // M' = (1 - (x - p)^k D) M (1 + (x - p)^k D) - k (x - p)^(k-1) D
+    //    = M + (x-p)^k (M D - D M - 1/x k D)
+    LOGME;
+    assert(normal(D.mul(D)).is_zero_matrix());
+    pfmatrix m = *this;
+    for (auto &kv : residues) {
+        const auto &pi = kv.first.first;
+        const auto &ki = kv.first.second;
+        const auto &ci = kv.second;
+        // (Ci D - D Ci) (x - pi)^ki (x - p)^k
+        m.add_pow(ci.mul(D).sub(D.mul(ci)), pi, ki, p, k);
+    }
+    m(p, k - 1) = m(p, k - 1).add(D.mul_scalar(-k));
+    // Only three blocks should be affected by this transformation:
+    // * the block in D
+    // * everything to the left of the D block
+    // * everything to the bottom of the D block
+    m.normalize();
+    return m;
+}
+
+/* Transformations
+ */
+
+enum transformation_kind {
+    tk_constant,
+    tk_balance,
+    tk_off_diagonal
+};
+
+struct transformation {
+    typedef pair<transformation_kind, lst> component_t;
+    typedef vector<component_t> list_t;
+    list_t components;
+    unsigned size;
+    transformation(unsigned size) : components(), size(size) {}
+    pfmatrix apply(const pfmatrix &m) const;
+    matrix to_matrix() const;
+    transformation widen(unsigned size, unsigned offset) const;
+    void add_constant_t(const matrix &l, const matrix &r);
+    void add_balance_t(const matrix &p, const ex &x1, const ex &x2, const ex &x);
+    void add_off_diagonal_t(const matrix &d, const ex &p, int k, const ex &x);
+    void add(const transformation &t);
+};
+
+matrix
+transform(const matrix &m, const matrix &t, const symbol &x)
+{
+    matrix matrix_inverse(const matrix m, unsigned algo = solve_algo::gauss);
+    return matrix_inverse(t).mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
+}
+
+pfmatrix
+transformation::apply(const pfmatrix &m) const
+{
+    LOGME;
+    pfmatrix pfm = m;
+            ex balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x);
+    for (const auto &c : components) {
+        switch (c.first) {
+        case tk_constant:
+            pfm = pfm.with_constant_t(
+                    ex_to_matrix(c.second.op(0)),
+                    ex_to_matrix(c.second.op(1)));
+            break;
+        case tk_balance:
+            pfm = pfm.with_balance_t(
+                    ex_to_matrix(c.second.op(0)),
+                    c.second.op(1),
+                    c.second.op(2));
+            break;
+        case tk_off_diagonal:
+            pfm = pfm.with_off_diagonal_t(
+                    ex_to_matrix(c.second.op(0)),
+                    c.second.op(1),
+                    ex_to<numeric>(c.second.op(2)).to_int());
+            break;
+        }
+    }
+    return pfm;
+}
+
+matrix
+transformation::to_matrix() const
+{
+    ex balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x);
+    ex m = unit_matrix(size);
+    for (const auto &c : components) {
+        switch (c.first) {
+        case tk_constant:
+            m *= c.second.op(1);
+            break;
+        case tk_balance:
+            m *= balance_t_matrix(
+                    ex_to_matrix(c.second.op(0)),
+                    c.second.op(1),
+                    c.second.op(2),
+                    c.second.op(3));
+            break;
+        case tk_off_diagonal:
+            m *= unit_matrix(size) +
+                    pow(c.second.op(3) - c.second.op(1), c.second.op(2))*
+                        c.second.op(0);
+            break;
+        }
+    }
+    return ex_to_matrix(m);
+}
+
+transformation
+transformation::widen(unsigned size, unsigned offset) const
+{
+    LOGME;
+    transformation t(size);
+    for (const auto &c : components) {
+        switch (c.first) {
+        case tk_constant:
+            t.add_constant_t(
+                glue_matrix(unit_matrix(size), c.second.op(0), offset),
+                glue_matrix(unit_matrix(size), c.second.op(1), offset));
+            break;
+        case tk_balance:
+            t.add_balance_t(
+                glue_matrix(matrix(size, size), c.second.op(0), offset),
+                c.second.op(1), c.second.op(2), c.second.op(3));
+            break;
+        case tk_off_diagonal:
+            t.add_off_diagonal_t(
+                glue_matrix(matrix(size, size), c.second.op(0), offset),
+                c.second.op(1),
+                ex_to<numeric>(c.second.op(2)).to_int(),
+                c.second.op(3));
+            break;
+        }
+    }
+    return t;
+}
+
+void
+transformation::add_constant_t(const matrix &l, const matrix &r)
+{
+    components.push_back(make_pair(tk_constant, lst{l, r}));
+}
+
+void
+transformation::add_balance_t(const matrix &p, const ex &x1, const ex &x2, const ex &x)
+{
+    components.push_back(make_pair(tk_balance, lst{p, x1, x2, x}));
+}
+
+void
+transformation::add_off_diagonal_t(const matrix &d, const ex &p, int k, const ex &x)
+{
+    components.push_back(make_pair(tk_off_diagonal, lst{d, p, k, x}));
+}
+
+void
+transformation::add(const transformation &t)
+{
+    for (const auto &c : t.components) {
+        components.push_back(c);
+    }
+}
+
 /* Block-triangular permutation of a matrix.
  * This class computes it, and keeps the results.
  *
@@ -845,6 +1054,7 @@ with_balance_t(const matrix &m, const matrix &P, const ex &x1, const ex &x2, con
 class block_triangular_permutation {
     public:
     block_triangular_permutation(const matrix &m);
+    block_triangular_permutation(const pfmatrix &m);
     const matrix & t();
     const vector<int> &block_size();
 
@@ -879,6 +1089,24 @@ block_triangular_permutation(const matrix &m)
             visit(i);
     }
 }
+
+matrix
+boolean_matrix(const pfmatrix &m)
+{
+    matrix b(m.nrows, m.ncols);
+    for (const auto &kv : m.residues) {
+        const auto &ci = kv.second;
+        for (unsigned k = 0; k < ci.nops(); k++) {
+            if (!ci.op(k).is_zero()) b.let_op(k) = 1;
+        }
+    }
+    return b;
+}
+
+block_triangular_permutation::
+block_triangular_permutation(const pfmatrix &m)
+    : block_triangular_permutation(boolean_matrix(m))
+{ }
 
 const matrix &
 block_triangular_permutation::t()
@@ -1597,9 +1825,7 @@ dual_basis_spanning_left_invariant_subspace(const matrix &m, const matrix &u)
     try {
         // Solve x*lev*u=1, and take x*lev as the result.
         matrix x = matrix_solve_left(normal(lev.mul(u)), tmp, identity);
-        for (unsigned i = 0; i < x.nops(); i++) {
-            x.let_op(i) = x.op(i).subs(tmpz);
-        }
+        matrix_map_inplace(x, [&](auto &&e) { return e.subs(tmpz); });
         results.push_back(x.mul(lev));
     } catch (const std::runtime_error &e) {
         if (e.what() != std::string("matrix::solve(): inconsistent linear system")) {
@@ -1831,7 +2057,7 @@ complexity(const pfmatrix &pfm)
 }
 
 ex
-balance_t(const matrix &p, const ex &x1, const ex &x2, const ex &x)
+balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x)
 {
     matrix cop = identity_matrix(p.rows()).sub(p);
     if (x1 == infinity) {
@@ -1861,12 +2087,12 @@ matrix_rank(const matrix &m)
 	return 0;
 }
 
-pair<pfmatrix, ex>
+pair<pfmatrix, transformation>
 fuchsify(const pfmatrix &m)
 {
     LOGME;
     pfmatrix pfm = m;
-    ex t = unit_matrix(m.nrows, m.ncols);
+    transformation t(m.nrows);
     // 1. Take a look at all {pi->pj} balances (where ki<>-1 and
     // kj<>-1), choose the least complex one.
     //
@@ -1979,8 +2205,8 @@ fuchsify(const pfmatrix &m)
                         reductions[i].pi, reductions[i].pj, c);
             }
             Reduction &r = reductions[mini];
-            logi("use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
-            t = t*balance_t(r.p, r.pi, r.pj, pfm.x);
+            logi("Use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
+            t.add_balance_t(r.p, r.pi, r.pj, pfm.x);
             pfm = r.pfm;
         } else {
             logd("* no good reductions found, looking at the bad ones");
@@ -1995,7 +2221,7 @@ fuchsify(const pfmatrix &m)
             }
             Reduction &r = poor_reductions[mini];
             logi("apply balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
-            t = t*balance_t(r.p, r.pi, r.pj, pfm.x);
+            t.add_balance_t(r.p, r.pi, r.pj, pfm.x);
             pfm = r.pfm;
         }
     }
@@ -2042,13 +2268,12 @@ cross(const matrix &v1, const matrix &v2)
     return res;
 }
 
-pair<pfmatrix, ex>
+pair<pfmatrix, transformation>
 normalize(const pfmatrix &m, const symbol &eps)
 {
     LOGME;
     pfmatrix pfm = m;
-    ex t = unit_matrix(m.nrows, m.ncols);
-    //map<ex, map<ex, unsigned, ex_is_less>, ex_is_less> evalues;
+    transformation t(m.nrows);
     for (;;) {
         logd("Current matrix complexity: {}", complexity(pfm));
         logd("Current expansion:");
@@ -2141,8 +2366,8 @@ normalize(const pfmatrix &m, const symbol &eps)
                         reductions[i].pi, reductions[i].pj, c);
             }
             Reduction &r = reductions[mini];
-            logi("use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
-            t = t*balance_t(r.p, r.pi, r.pj, pfm.x);
+            logi("Use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
+            t.add_balance_t(r.p, r.pi, r.pj, pfm.x);
             pfm = r.pfm;
         } else {
             loge("no suitable reductions found");
@@ -2188,7 +2413,7 @@ is_normal(const pfmatrix &pfm, const symbol &eps)
  * ============================================================
  */
 
-pair<pfmatrix, ex>
+pair<pfmatrix, transformation>
 factorize(const pfmatrix &m, const symbol &eps)
 {
     LOGME;
@@ -2200,11 +2425,10 @@ factorize(const pfmatrix &m, const symbol &eps)
     symbol mu("MU");
     lst eqs;
     for (const auto &kv : m.residues) {
-        //const auto &pi = kv.first.first;
         const auto &ki = kv.first.second;
-        assert(ki == -1);
         const auto &ci = kv.second;
         if (ci.is_zero_matrix()) continue;
+        assert(ki == -1);
         matrix ci_eps = ci.mul_scalar(1/eps);
         matrix ci_mu(ci_eps.rows(), ci_eps.cols());
         for (unsigned i = 0; i < ci_eps.nops(); i++) {
@@ -2218,9 +2442,7 @@ factorize(const pfmatrix &m, const symbol &eps)
     logd("solving {} linear equations in {} variables", eqs.nops(), tmp.nops());
     ex sol = lsolve(eqs, tmp, solve_algo::gauss);
     logd("found a solution");
-    for (unsigned i = 0; i < t.nops(); i++) {
-        t.let_op(i) = t.op(i).subs(sol);
-    }
+    matrix_map_inplace(t, [&](auto &&e) { return e.subs(sol); });
     tmp.append(mu);
     for (int range = 0;; range += 1 + range/16) {
         logd("substituting free variables, range={}", range);
@@ -2229,12 +2451,14 @@ factorize(const pfmatrix &m, const symbol &eps)
             for (unsigned i = 0; i < tmp.nops(); i++) {
                 map[tmp.op(i)] = randint(-range, range);
             }
-            matrix st(t.rows(), t.cols());
-            for (unsigned i = 0; i < t.nops(); i++) {
-                st.let_op(i) = normal(t.op(i).subs(map));
-            }
+            matrix st = matrix_map(t, [&](auto &&e) {
+                return normal(e.subs(map));
+            });
             matrix invst = normal(matrix_inverse(st));
-            return make_pair(m.with_constant_t(invst, st), st);
+            transformation t_(m.nrows);
+            t_.add_constant_t(invst, st);
+            logi("Use constant transformation:\n{}", st);
+            return make_pair(m.with_constant_t(invst, st), t_);
         } catch (const pole_error & e) {
             logd("got error: {}; retrying", e.what());
             continue;
@@ -2262,6 +2486,132 @@ is_factorized(const pfmatrix &pfm, const symbol &eps)
         }
     }
     return true;
+}
+
+/* Block reduction
+ * ============================================================
+ */
+
+pair<pfmatrix, transformation>
+reduce_diagonal_blocks(const pfmatrix &m, const symbol &eps)
+{
+    LOGME;
+    block_triangular_permutation btp(m);
+    transformation t(m.nrows);
+    t.add_constant_t(btp.t().transpose(), btp.t());
+    // TODO: avoid normalize() call in with_constant_t()
+    pfmatrix pfm = m.with_constant_t(btp.t().transpose(), btp.t());
+    int offs = 0;
+    for (int size : btp.block_size()) {
+        logi("Reducing {}x{} diagonal block at offset {}", size, size, offs);
+        pfmatrix b = pfm.block(offs, size);
+        auto mt1 = fuchsify(b);
+        assert(is_fuchsian(mt1.first));
+        auto pfmx1 = t.apply(m);
+        t.add(mt1.second.widen(pfm.nrows, offs));
+        auto mt2 = normalize(mt1.first, eps);
+        assert(is_normal(mt2.first, eps));
+        t.add(mt2.second.widen(pfm.nrows, offs));
+        auto mt3 = factorize(mt2.first, eps);
+        assert(is_factorized(mt3.first, eps));
+        t.add(mt3.second.widen(pfm.nrows, offs));
+        offs += size;
+    }
+    logd("Applying the combined reduction to the whole system");
+    pfm = t.apply(m);
+    pfm.normalize();
+    offs = 0;
+    for (int size : btp.block_size()) {
+        logd("Double-checking {}x{} block at offset {}", size, size, offs);
+        pfmatrix b = pfm.block(offs, size);
+        assert(is_fuchsian(b));
+        assert(is_normal(b, eps));
+        assert(is_factorized(b, eps));
+        offs += size;
+    }
+    return make_pair(pfm, t);
+}
+
+pair<pfmatrix, transformation>
+fuchsify_off_diagonal_blocks(const pfmatrix &m)
+{
+    LOGME;
+    block_triangular_permutation btp(m);
+    transformation t(m.nrows);
+    t.add_constant_t(btp.t().transpose(), btp.t());
+    // TODO: avoid normalize() call in with_constant_t()
+    pfmatrix pfm = m.with_constant_t(btp.t().transpose(), btp.t());
+    auto bs = btp.block_size();
+    unsigned offs1 = 0;
+    for (int i1 = 0; i1 < (int)bs.size(); i1++) {
+        unsigned size1 = bs[i1];
+        unsigned offs2 = offs1;
+        for (int i2 = i1 - 1; i2 >= 0; i2--) {
+            unsigned size2 = bs[i2];
+            offs2 -= size2;
+loop:;
+            for (auto &&kv : pfm.residues) {
+                const auto &pi = kv.first.first;
+                const auto &ki = kv.first.second;
+                const auto &ci = kv.second;
+                if (ki == -1) continue;
+                if (ci.is_zero_matrix()) continue;
+                auto a = ex_to_matrix(sub_matrix(pfm(pi, -1), offs1, size1, offs1, size1));
+                auto b = ex_to_matrix(sub_matrix(ci, offs1, size1, offs2, size2));
+                auto c = ex_to_matrix(sub_matrix(pfm(pi, -1), offs2, size2, offs2, size2));
+                if (b.is_zero_matrix()) continue;
+                logi("Reducing {}x{} block at {}:{}, at {}={}, k={}", size1, size2, offs1, offs2, pfm.x, pi, ki);
+                lst d_vars;
+                matrix d(size1, size2);
+                for (unsigned i = 0; i < size1*size2; i++) {
+                    symbol t;
+                    d_vars.append(t);
+                    d.let_op(i) = t;
+                }
+                // M = {A 0}
+                //     {B C}
+                // M' = off_diagonal_t(M, D, p, k+1)
+                // B'_{p,k} = B_{p,k} + A_{p,-1} D - D C_{p,-1} + (k+1) D
+                matrix eqmx = b.add(a.mul(d).sub(d.mul(c)).sub(d.mul_scalar(ki + 1)));
+                lst eq;
+                for (unsigned i = 0; i < eqmx.nops(); i++) {
+                    eq.append(eqmx.op(i) == 0);
+                }
+                ex sol = lsolve(eq, d_vars, solve_algo::gauss);
+                matrix D(m.nrows, m.ncols);
+                for (unsigned i = 0; i < size1; i++) {
+                    for (unsigned j = 0; j < size2; j++) {
+                        D(offs1 + i, offs2 + j) = d(i, j).subs(sol);
+                    }
+                }
+                logi("Use off-diagonal transformation, p={}, k={}, D=\n{}", pi, ki + 1, D);
+                pfm = pfm.with_off_diagonal_t(D, pi, ki + 1);
+                pfm.normalize();
+                assert(pfm(pi, ki).is_zero_matrix());
+                t.add_off_diagonal_t(D, pi, ki + 1, pfm.x);
+                goto loop;
+            }
+        }
+        offs1 += size1;
+    }
+    return make_pair(pfm, t);
+}
+
+pair<pfmatrix, transformation>
+reduce(const pfmatrix &m, const symbol &eps)
+{
+    LOGME;
+    auto mt1 = reduce_diagonal_blocks(m, eps);
+    auto mt2 = fuchsify_off_diagonal_blocks(mt1.first);
+    auto mt3 = factorize(mt2.first, eps);
+    transformation t(m.nrows);
+    t.add(mt1.second);
+    t.add(mt2.second);
+    t.add(mt3.second);
+    assert(is_fuchsian(mt3.first));
+    assert(is_normal(mt3.first, eps));
+    assert(is_factorized(mt3.first, eps));
+    return make_pair(mt3.first, t);
 }
 
 /* Logging formatters

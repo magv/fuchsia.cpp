@@ -120,30 +120,28 @@ main(int argc, char *argv[])
         pfmatrix pfm(ms.first, x);
         auto r = fuchsify(pfm);
         matrix_m = r.first.to_matrix();
-        matrix_t = ex_to_matrix(r.second);
+        matrix_t = r.second.to_matrix();
     }
     else if ((argc == 2) && !strcmp(argv[0], "normalize")) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = normalize(pfm, eps);
         matrix_m = r.first.to_matrix();
-        matrix_t = ex_to_matrix(r.second);
+        matrix_t = r.second.to_matrix();
     }
     else if ((argc == 2) && !strcmp(argv[0], "factorize")) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = factorize(pfm, eps);
         matrix_m = r.first.to_matrix();
-        matrix_t = ex_to_matrix(r.second);
+        matrix_t = r.second.to_matrix();
     }
     else if ((argc == 2) && !strcmp(argv[0], "reduce")) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
-        auto r1 = fuchsify(pfm);
-        auto r2 = normalize(r1.first, eps);
-        auto r3 = factorize(r2.first, eps);
-        matrix_m = r3.first.to_matrix();
-        matrix_t = ex_to_matrix(r1.second * r2.second * r3.second);
+        auto r = reduce(pfm, eps);
+        matrix_m = r.first.to_matrix();
+        matrix_t = r.second.to_matrix();
     }
     else if ((argc >= 3) && !strcmp(argv[0], "transform")) {
         matrix m;

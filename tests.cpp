@@ -316,6 +316,69 @@ TEST_CASE("pfmatrix with_*") {
     }
 }
 
+TEST_CASE("with_off_diagonal_t") {
+    symbol x("x"), eps("eps");
+    symbol m11("m11"), m21("m21"), m22("m22"),
+           m31("m31"), m32("m32"), m33("m33"),
+           m41("m41"), m42("m42"), m43("m43"),
+           m44("m44");
+    matrix m = {
+        {m11*eps/x,         0,         0,         0},
+        {m21/x/x/x, m22*eps/x,         0,         0},
+        {m31/x/x/x, m32/x/x/x, m33*eps/x,         0},
+        {m41/x/x/x, m42/x/x/x, m43/x/x/x, m44*eps/x},
+    };
+    symbol d("d");
+    matrix D = {
+        {0, 0, 0, 0},
+        {0, 0, 0, 0},
+        {0, d, 0, 0},
+        {0, 0, 0, 0},
+    };
+    REQUIRE(normal(D.mul(D)).is_zero_matrix());
+    pfmatrix pfm(m, x);
+    REQUIRE(ratcan(m) == ratcan(pfm.to_matrix()));
+    for (int k = -5; k <= +5; k++) {
+        ex p = 0;
+        auto t = identity_matrix(m.rows()).add(D.mul_scalar(pow(x - p, k)));
+        auto m2 = t.inverse().mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
+        auto pfm2 = pfm.with_off_diagonal_t(D, p, k);
+        REQUIRE(ratcan(m2) == ratcan(pfm2.to_matrix()));
+    }
+}
+
+TEST_CASE("fuchsify_off_diagonal_blocks 2x2, k<0") {
+    symbol x("x"), eps("eps");
+    symbol a("a"), b("b"), c("c");
+    matrix m = matrix{
+        {a*eps/x,       0},
+        {b/x/x/x, c*eps/x},
+    };
+    pfmatrix pfm(m, x);
+    REQUIRE(ratcan(m) == ratcan(pfm.to_matrix()));
+    REQUIRE(!is_fuchsian(pfm));
+    auto mt = fuchsify_off_diagonal_blocks(pfm);
+    REQUIRE(is_fuchsian(mt.first));
+    auto pfm2 = mt.second.apply(pfm);
+    REQUIRE(ratcan(mt.first.to_matrix()) == ratcan(pfm2.to_matrix()));
+}
+
+TEST_CASE("fuchsify_off_diagonal_blocks 2x2, k>0") {
+    symbol x("x"), eps("eps");
+    symbol a("a"), b("b"), c("c");
+    matrix m = matrix{
+        {a*eps/x,       0},
+        {b*x*x*x, c*eps/x},
+    };
+    pfmatrix pfm(m, x);
+    REQUIRE(ratcan(m) == ratcan(pfm.to_matrix()));
+    REQUIRE(!is_fuchsian(pfm));
+    auto mt = fuchsify_off_diagonal_blocks(pfm);
+    REQUIRE(is_fuchsian(mt.first));
+    auto pfm2 = mt.second.apply(pfm);
+    REQUIRE(ratcan(mt.first.to_matrix()) == ratcan(pfm2.to_matrix()));
+}
+
 TEST_CASE("jordan") {
     matrix j0 = {
         {2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
