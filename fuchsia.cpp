@@ -746,6 +746,7 @@ pfmatrix::with_constant_t(const matrix &L, const matrix &R) const
         const auto &Ci = kv.second;
         m(pi, ki) = L.mul(Ci).mul(R);
     }
+    m.normalize();
     return m;
 }
 
