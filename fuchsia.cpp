@@ -50,16 +50,16 @@ log_format(ostream &o, const T &value)
 }
 
 void
-log_print_start(const char *lvl)
+log_print_start(const char *pre, const char *post)
 {
     auto t = chrono::steady_clock::now();
     auto dt = chrono::duration_cast<chrono::duration<double>>(t - _log_starttime).count();
-    cout << "\033[32m[" << lvl << " " << std::fixed << std::setprecision(4) << dt << "s +";
+    cout << pre << std::fixed << std::setprecision(4) << dt << "s +";
     cout << chrono::duration_cast<chrono::duration<double>>(t - _log_lasttime).count() << "s";
     for (int i = 0; i < _log_depth; i++) {
         cout << " *";
     }
-    cout << "]\033[0m ";
+    cout << post;
     _log_lasttime = t;
 }
 
@@ -74,7 +74,7 @@ log_print_one(const char *fmt, const T &value)
 void
 log_print_end(const char *fmt)
 {
-    cout << fmt << endl;
+    cout << fmt << "\033[0m\n";
 }
 
 struct _sequencehack {
@@ -83,9 +83,9 @@ struct _sequencehack {
 };
 
 template<typename ...Args> static void
-log_fmt(const char *lvl, const char *fmt, const Args &...args)
+log_fmt(const char *pre, const char *post, const char *fmt, const Args &...args)
 {
-    log_print_start(lvl);
+    log_print_start(pre, post);
     (void) _sequencehack {
         (fmt = log_print_one(fmt, args), 0)
         ...
@@ -100,7 +100,7 @@ template<typename... Args> static inline void
 logd(const char *fmt, const Args &...args)
 {
     if (log_verbose) {
-        log_fmt("dbg", fmt, args...);
+        log_fmt("\033[2;37m[dbg ", "] ", fmt, args...);
     }
 }
 
@@ -109,7 +109,7 @@ logd(const char *fmt, const Args &...args)
 template<typename... Args> static inline void
 logi(const char *fmt, const Args &...args)
 {
-    log_fmt("inf", fmt, args...);
+    log_fmt("\033[32m[inf ", "]\033[0m ", fmt, args...);
 }
 
 /* Log an error message.
@@ -117,7 +117,7 @@ logi(const char *fmt, const Args &...args)
 template<typename... Args> static inline void
 loge(const char *fmt, const Args &...args)
 {
-    log_fmt("err", fmt, args...);
+    log_fmt("\033[31m[err ", "] ", fmt, args...);
 }
 
 template<typename F>
