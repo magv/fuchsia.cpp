@@ -754,7 +754,7 @@ pfmatrix::with_balance_t(const matrix &P, const ex &x1, const ex &x2) const
 {
     LOGME;
     pfmatrix m(nrows, ncols, x);
-    const matrix coP = ex_to_matrix(unit_matrix(P.rows()) - P);
+    const matrix coP = identity_matrix(P.rows()).sub(P);
     if (x1 == infinity) {
         const matrix neg_coP = coP.mul_scalar(-1);
         for (const auto &kv : residues) {
