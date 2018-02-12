@@ -163,6 +163,10 @@ class fuchsia_error : public exception {
  * ============================================================
  */
 
+int randint(int a, int b) {
+    return rand() % (b - a + 1) - a;
+}
+
 matrix
 ex_to_matrix(const ex &m)
 {
@@ -1949,7 +1953,7 @@ fuchsify(const pfmatrix &m)
                     });
                 }
             }
-            ex randomp = rand()%20 - 10;
+            ex randomp = randint(-10, 10);
             poor_reductions.push_back(Reduction {
                 pi,
                 randomp,
@@ -2176,7 +2180,7 @@ factorize(const pfmatrix &m, const symbol &eps)
         try {
             exmap map;
             for (unsigned i = 0; i < tmp.nops(); i++) {
-                map[tmp.op(i)] = (range == 0) ? 0 : rand() % (2*range+1) - range - 1;
+                map[tmp.op(i)] = randint(-range, range);
             }
             matrix st(t.rows(), t.cols());
             for (unsigned i = 0; i < t.nops(); i++) {
