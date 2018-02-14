@@ -197,6 +197,18 @@ glue_matrix(const ex &a, const ex &b, unsigned offset)
 }
 
 matrix
+matrix_cut(const matrix &m, unsigned r, unsigned nr, unsigned c, unsigned nc)
+{
+    matrix res(nr, nc);
+    for (unsigned i = 0; i < nr; i++) {
+        for (unsigned j = 0; j < nc; j++) {
+            res(i, j) = m(r + i, c + j);
+        }
+    }
+    return res;
+}
+
+matrix
 matrix_solve_left(const matrix &m, const matrix &vars, const matrix &rhs)
 {
     return m.transpose().solve(vars.transpose(), rhs.transpose()).transpose();
@@ -658,7 +670,7 @@ pfmatrix::block(unsigned offset, unsigned size) const
         const auto &pi = kv.first.first;
         const auto &ki = kv.first.second;
         const auto &ci = kv.second;
-        matrix b = ex_to<matrix>(sub_matrix(ci, offset, size, offset, size));
+        matrix b = matrix_cut(ci, offset, size, offset, size);
         if (!b.is_zero_matrix())
             m(pi, ki) = b;
     }
@@ -1162,7 +1174,7 @@ charpoly_by_blocks(const matrix &m, const ex &lambda)
     ex cp = 1;
     int o = 0;
     for (int size : btp.block_size()) {
-        matrix b = ex_to<matrix>(sub_matrix(mm, o, size, o, size));
+        matrix b = matrix_cut(mm, o, size, o, size);
         cp *= b.charpoly(lambda);
         o += size;
     }
@@ -1181,7 +1193,7 @@ determinant_by_blocks(const matrix &m)
     ex res = 1;
     int o = 0;
     for (int size : btp.block_size()) {
-        matrix b = ex_to<matrix>(sub_matrix(mm, o, size, o, size));
+        matrix b = matrix_cut(mm, o, size, o, size);
         res *= b.determinant();
         o += size;
     }
@@ -1781,7 +1793,7 @@ jordan(const matrix &m)
                 if (i != 0) {
                     rescale_submatrix(q, 0, n, idxq, i+1);
                 }
-                xspace.add_rows(ex_to_matrix(sub_matrix(q, 0, n, idxq, i+1)).transpose());
+                xspace.add_rows(matrix_cut(q, 0, n, idxq, i+1).transpose());
                 xspace.normalize();
                 idxq += i + 1;
                 jcs.push_back(i + 1);
@@ -1881,9 +1893,9 @@ alg1(matrix l0, const vector<int> &jcs)
         for (;; i++) {
             assert(i < n);
             if (s[i]) continue;
-            matrix lxb4i = ex_to_matrix(sub_matrix(lx, 0, n, 0, i));
-            matrix tmpi = ex_to_matrix(sub_matrix(tmp, 0, i, 0, 1));
-            matrix lxi = ex_to_matrix(sub_matrix(lx, 0, n, i, 1));
+            matrix lxb4i = matrix_cut(lx, 0, n, 0, i);
+            matrix tmpi = matrix_cut(tmp, 0, i, 0, 1);
+            matrix lxi = matrix_cut(lx, 0, n, i, 1);
             try {
                 sol = lxb4i.solve(tmpi, lxi, solve_algo::gauss);
                 //assert(normal(lxb4i.mul(sol).sub(lxi)).is_zero_matrix());
@@ -1968,9 +1980,9 @@ alg1x(const matrix &a0, const matrix &a1)
     matrix l0(ncells, ncells);
     matrix l1(ncells, ncells);
     for (unsigned k = 0; k < ncells; k++) {
-        matrix v0t = ex_to_matrix(sub_matrix(invu, jce[k]-1, 1, 0, n));
+        matrix v0t = matrix_cut(invu, jce[k]-1, 1, 0, n);
         for (unsigned l = 0; l < ncells; l++) {
-            matrix u0 = ex_to_matrix(sub_matrix(u, 0, n, jcb[l], 1));
+            matrix u0 = matrix_cut(u, 0, n, jcb[l], 1);
             l0(k, l) = v0t.mul(a1).mul(u0).op(0);
             l1(k, l) = v0t.mul(u0).op(0);
         }
@@ -2556,9 +2568,9 @@ loop:;
                 const auto &ci = kv.second;
                 if (ki == -1) continue;
                 if (ci.is_zero_matrix()) continue;
-                auto a = ex_to_matrix(sub_matrix(pfm(pi, -1), offs1, size1, offs1, size1));
-                auto b = ex_to_matrix(sub_matrix(ci, offs1, size1, offs2, size2));
-                auto c = ex_to_matrix(sub_matrix(pfm(pi, -1), offs2, size2, offs2, size2));
+                auto a = matrix_cut(pfm(pi, -1), offs1, size1, offs1, size1);
+                auto b = matrix_cut(ci, offs1, size1, offs2, size2);
+                auto c = matrix_cut(pfm(pi, -1), offs2, size2, offs2, size2);
                 if (b.is_zero_matrix()) continue;
                 logi("Reducing {}x{} block at {}:{}, at {}={}, k={}", size1, size2, offs1, offs2, pfm.x, pi, ki);
                 lst d_vars;
