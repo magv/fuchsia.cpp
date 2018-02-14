@@ -902,6 +902,7 @@ pfmatrix::with_off_diagonal_t(const matrix &D, const ex &p, int k) const
         const auto &pi = kv.first.first;
         const auto &ki = kv.first.second;
         const auto &ci = kv.second;
+        if (ci.is_zero_matrix()) continue;
         // (Ci D - D Ci) (x - pi)^ki (x - p)^k
         m.add_pow(ci.mul(D).sub(D.mul(ci)), pi, ki, p, k);
     }
@@ -2563,8 +2564,10 @@ fuchsify_off_diagonal_blocks(const pfmatrix &m)
             offs2 -= size2;
 loop:;
             for (auto &&kv : pfm.residues) {
-                const auto &pi = kv.first.first;
-                const auto &ki = kv.first.second;
+                // We'll need pi and ki after pfm variable is
+                // overwritten, so these can't be references.
+                const auto pi = kv.first.first;
+                const auto ki = kv.first.second;
                 const auto &ci = kv.second;
                 if (ki == -1) continue;
                 if (ci.is_zero_matrix()) continue;
@@ -2599,7 +2602,7 @@ loop:;
                 logi("Use off-diagonal transformation, p={}, k={}, D=\n{}", pi, ki + 1, D);
                 pfm = pfm.with_off_diagonal_t(D, pi, ki + 1);
                 pfm.normalize();
-                assert(pfm(pi, ki).is_zero_matrix());
+                assert(matrix_cut(pfm(pi, ki), offs1, size1, offs2, size2).is_zero_matrix());
                 t.add_off_diagonal_t(D, pi, ki + 1, pfm.x);
                 goto loop;
             }
