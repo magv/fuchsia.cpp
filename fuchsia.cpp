@@ -252,6 +252,30 @@ infinity_t::print(const print_context & c, unsigned level) const
 pair<matrix, symtab>
 load_matrix(istream &i, const symtab &table)
 {
+    for (int depth = 0;;) {
+        int c = i.get();
+        if (c == EOF)
+            throw parse_error("got EOF before any data");
+        if (isspace(c)) continue;
+        if (c == '(') {
+            int c = i.get();
+            if (c == EOF)
+                throw parse_error("got EOF before any data");
+            if (c == '*') { depth++; continue; }
+            throw parse_error("matrix file should start with a '{' or a (* comment *)");
+        }
+        if (depth == 0) {
+            if (c == '{') { i.putback(c); break; }
+            throw parse_error("matrix file should start with a '{' or a (* comment *)");
+        } else {
+            if (c == '*') {
+                int c = i.get();
+                if (c == EOF)
+                    throw parse_error("EOF before any data");
+                if (c == ')') { depth--; continue; }
+            }
+        }
+    }
     parser reader(table);
     ex x = reader(i);
     // TODO: check that the input is indeed a matrix of rational
@@ -267,6 +291,7 @@ pair<matrix, symtab>
 load_matrix(const char *filename, const symtab &table)
 {
     ifstream i(filename);
+    if (!i) throw parse_error("the matrix file was not found");
     return load_matrix(i, table);
 }
 
