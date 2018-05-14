@@ -2588,6 +2588,8 @@ fuchsify_off_diagonal_blocks(const pfmatrix &m)
             unsigned size2 = bs[i2];
             offs2 -= size2;
 loop:;
+            logd("Looking at {}x{} block at {}:{}", size1, size2, offs1, offs2);
+            assert(offs1 > offs2);
             for (auto &&kv : pfm.residues) {
                 // We'll need pi and ki after pfm variable is
                 // overwritten, so these can't be references.
@@ -2596,9 +2598,7 @@ loop:;
                 const auto &ci = kv.second;
                 if (ki == -1) continue;
                 if (ci.is_zero_matrix()) continue;
-                auto a = matrix_cut(pfm(pi, -1), offs1, size1, offs1, size1);
                 auto b = matrix_cut(ci, offs1, size1, offs2, size2);
-                auto c = matrix_cut(pfm(pi, -1), offs2, size2, offs2, size2);
                 if (b.is_zero_matrix()) continue;
                 logi("Reducing {}x{} block at {}:{}, at {}={}, k={}", size1, size2, offs1, offs2, pfm.x, pi, ki);
                 lst d_vars;
@@ -2608,16 +2608,43 @@ loop:;
                     d_vars.append(t);
                     d.let_op(i) = t;
                 }
-                // M = {A 0}
-                //     {B C}
-                // M' = off_diagonal_t(M, D, p, k+1)
-                // B'_{p,k} = B_{p,k} + A_{p,-1} D - D C_{p,-1} + (k+1) D
-                matrix eqmx = b.add(a.mul(d).sub(d.mul(c)).sub(d.mul_scalar(ki + 1)));
+                matrix eqmx;
+                if (ki < 0) {
+                    // M = {A 0} = {a/x   0  }
+                    //     {B C}   {b x^k c/x}
+                    // D = {0         0}
+                    //     {d x^(k+1) 0}
+                    // M' = off_diagonal_t(M, D, p, k+1)
+                    //    = M + x^(k+1) (M D - D M - 1/x (k+1) D)
+                    // B' = B + x^k (c d - d a - (k+1) d)
+                    auto a = matrix_cut(pfm(pi, -1), offs2, size2, offs2, size2);
+                    auto c = matrix_cut(pfm(pi, -1), offs1, size1, offs1, size1);
+                    eqmx = b.add(c.mul(d).sub(d.mul(a)).sub(d.mul_scalar(ki + 1)));
+                } else {
+                    assert(pi == 0);
+                    // The case of ki >= 0 is special, because all pfm(*, -1)
+                    // residues contribute to the transformed off-diagonal
+                    // cell. This is because (x-p1)^0 = (x-0)^0.
+                    //
+                    // We could reproduce the correct calculations of
+                    // the transformed cell here, but just reusing
+                    // with_off_diagonal_t() code is equally valid, even if
+                    // slower.
+                    matrix D(m.nrows, m.ncols);
+                    for (unsigned i = 0; i < size1; i++) {
+                        for (unsigned j = 0; j < size2; j++) {
+                            D(offs1 + i, offs2 + j) = d(i, j);
+                        }
+                    }
+                    pfmatrix pfm2 = pfm.with_off_diagonal_t(D, pi, ki + 1);
+                    eqmx = matrix_cut(pfm2(pi, ki), offs1, size1, offs2, size2);
+                }
                 lst eq;
                 for (unsigned i = 0; i < eqmx.nops(); i++) {
                     eq.append(eqmx.op(i) == 0);
                 }
                 ex sol = lsolve(eq, d_vars, solve_algo::gauss);
+                assert(sol.nops() == d_vars.nops());
                 matrix D(m.nrows, m.ncols);
                 for (unsigned i = 0; i < size1; i++) {
                     for (unsigned j = 0; j < size2; j++) {

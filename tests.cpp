@@ -379,6 +379,25 @@ TEST_CASE("fuchsify_off_diagonal_blocks 2x2, k>0") {
     REQUIRE(ratcan(mt.first.to_matrix()) == ratcan(pfm2.to_matrix()));
 }
 
+TEST_CASE("fuchsify_off_diagonal_blocks 2x2, k=0") {
+    symbol x("x"), eps("eps");
+    symbol a1("a1"), a2("a2"), a3("a3");
+    symbol b1("b1"), b2("b2"), b3("b3");
+    symbol c1("c1"), c2("c2"), c3("c3");
+    matrix m = matrix{
+        {eps*(a1/(x-1)+a2/(x-2)+a3/(x-3)), 0, 0},
+        {b1, eps*(c1/(x-1)+c2/(x-2)+c3/(x-3)), 0},
+        {b2, b3, eps/x}
+    };
+    pfmatrix pfm(m, x);
+    REQUIRE(ratcan(m) == ratcan(pfm.to_matrix()));
+    REQUIRE(!is_fuchsian(pfm));
+    auto mt = fuchsify_off_diagonal_blocks(pfm);
+    REQUIRE(is_fuchsian(mt.first));
+    auto pfm2 = mt.second.apply(pfm);
+    REQUIRE(ratcan(mt.first.to_matrix()) == ratcan(pfm2.to_matrix()));
+}
+
 TEST_CASE("jordan") {
     matrix j0 = {
         {2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
