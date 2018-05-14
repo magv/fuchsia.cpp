@@ -1,54 +1,83 @@
 #include <unistd.h>
 #include "fuchsia.cpp"
 
+static const char usagetext[] = R"(
+Ss{NAME}
+    Nm{fuchsia} -- transform linear differential equations into epsilon form.
+
+Ss{SYNOPSYS}
+    Nm{fuchsia} [options] Cm{command} Ar{args} ...
+
+Ss{COMMANDS}
+    Cm{show} [Fl{-x} Ar{name}] Ar{matrix}
+        Show a description of a given matrix.
+
+    Cm{reduce} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+        Find an epsilon form of the given matrix.
+
+    Cm{fuchsify} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+        Find a transformation that will transform a given matrix into Fuchsian
+        form.
+
+    Cm{normalize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+        Find a transformation that will transform a given Fuchsian matrix into
+        normalized form.
+
+    Cm{factorize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+        Find a transformation that will make a given normalized matrix
+        proportional to the infinitesimal parameter.
+
+    Cm{sort} [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+        Find a block-triangular form of the given matrix by shuffling.
+
+    Cm{transform} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] Ar{matrix} Ar{transform} ...
+        Transform a given matrix using a given transformation.
+
+    Cm{changevar} [Fl{-x} Ar{name}] [Fl{-y} Ar{name}] [Fl{-m} Ar{path}] Ar{matrix} Ar{expr}
+        Perform a change of variable from x to y, such that x=expr(y).
+
+Ss{OPTIONS}
+    Fl{-h}         Show this help message.
+    Fl{-v}         Print a more verbose log.
+    Fl{-x} Ar{name}    Use this name for the free variable (default: x).
+    Fl{-y} Ar{name}    Use this name for the new free variable (default: y).
+    Fl{-e} Ar{name}    Use this name for the infinitesimal parameter (default: eps).
+    Fl{-m} Ar{path}    Save the resulting matrix into this file.
+    Fl{-t} Ar{path}    Save the resulting transformation into this file.
+
+Ss{ARGUMENTS}
+    Ar{matrix}     Read the input matrix from this file.
+    Ar{transform}  Read the transformation matrix from this file.
+    Ar{expr}       Arbitrary expression.
+
+Ss{AUTHORS}
+    Vitaly Magerya <vitaly.magerya@tx97.net>
+)";
+
+static bool COLORS = !!isatty(STDOUT_FILENO);
+
 void
 usage()
 {
-    cerr <<
-        "Usage:\n"
-        "    fuchsia [options] <command> <args>...\n"
-        "\n"
-        "Commands:\n"
-        "    show [-x <name>] <matrix>\n"
-        "        show a description of a given matrix\n"
-        "\n"
-        "    reduce [-x <name>] [-e <name>] [-m <path>] [-t <path>] <matrix>\n"
-        "        find an epsilon form of the given matrix\n"
-        "\n"
-        "    fuchsify [-x <name>] [-m <path>] [-t <path>] <matrix>\n"
-        "        find a transformation that will transform a given matrix\n"
-        "        into Fuchsian form\n"
-        "\n"
-        "    normalize [-x <name>] [-e <name>] [-m <path>] [-t <path>] <matrix>\n"
-        "        find a transformation that will transform a given Fuchsian\n"
-        "        matrix into normalized form\n"
-        "\n"
-        "    factorize [-x <name>] [-e <name>] [-m <path>] [-t <path>] <matrix>\n"
-        "        find a transformation that will make a given normalized\n"
-        "        matrix proportional to the infinitesimal parameter\n"
-        "\n"
-        "    sort [-m <path>] [-t <path>] <matrix>\n"
-        "        find a block-triangular form of the given matrix\n"
-        "\n"
-        "    transform [-x <name>] [-m <path>] <matrix> <transform> ...\n"
-        "        transform a given matrix using a given transformation\n"
-        "\n"
-        "    changevar [-x <name>] [-y <name>] [-m <path>] <matrix> <expr>\n"
-        "        perform a change of variable from x to y, such that x=f(y)\n"
-        "\n"
-        "Options:\n"
-        "    -h          show this help message\n"
-        "    -v          produce a more verbose log\n"
-        "    -x <name>   use this name for the free variable (default: x)\n"
-        "    -y <name>   use this name for the new free variable (default: y)\n"
-        "    -e <name>   use this name for the infinitesimal parameter (default: eps)\n"
-        "    -m <path>   save the resulting matrix into this file\n"
-        "    -t <path>   save the resulting transformation into this file\n"
-        "\n"
-        "Arguments:\n"
-        "    <matrix>    read the input matrix from this file\n"
-        "    <transform> read the transformation matrix from this file\n"
-        "    <expr>      arbitrary expression\n";
+    const char *p = strchr(usagetext, '\n') + 1;
+    for (;;) {
+        const char *l = strchr(p + 2, '{');
+        if (l == NULL) break;
+        const char *r = strchr(l, '}');
+        if (r == NULL) break;
+        const char *a = "", *b = "\033[0m";
+        if (l[-2] == 'S' && l[-1] == 's') { a = "\033[1m"; }
+        if (l[-2] == 'N' && l[-1] == 'm') { a = "\033[1;35m"; }
+        if (l[-2] == 'F' && l[-1] == 'l') { a = "\033[33m"; }
+        if (l[-2] == 'C' && l[-1] == 'm') { a = "\033[1m"; }
+        if (l[-2] == 'A' && l[-1] == 'r') { a = "\033[32m"; }
+        cout.write(p, l - p - 2);
+        if (COLORS) cout << a;
+        cout.write(l + 1, r - l - 1);
+        if (COLORS) cout << b;
+        p = r + 1;
+    }
+    cout << p;
 }
 
 int
