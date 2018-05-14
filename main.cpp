@@ -12,22 +12,22 @@ Ss{COMMANDS}
     Cm{show} [Fl{-x} Ar{name}] Ar{matrix}
         Show a description of a given matrix.
 
-    Cm{reduce} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+    Cm{reduce} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find an epsilon form of the given matrix.
 
-    Cm{fuchsify} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+    Cm{fuchsify} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find a transformation that will transform a given matrix into Fuchsian
         form.
 
-    Cm{normalize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+    Cm{normalize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find a transformation that will transform a given Fuchsian matrix into
         normalized form.
 
-    Cm{factorize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+    Cm{factorize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find a transformation that will make a given normalized matrix
         proportional to the infinitesimal parameter.
 
-    Cm{sort} [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] Ar{matrix}
+    Cm{sort} [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find a block-triangular form of the given matrix by shuffling.
 
     Cm{transform} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] Ar{matrix} Ar{transform} ...
@@ -44,6 +44,7 @@ Ss{OPTIONS}
     Fl{-e} Ar{name}    Use this name for the infinitesimal parameter (default: eps).
     Fl{-m} Ar{path}    Save the resulting matrix into this file.
     Fl{-t} Ar{path}    Save the resulting transformation into this file.
+    Fl{-i} Ar{path}    Save the inverse transformation into this file.
 
 Ss{ARGUMENTS}
     Ar{matrix}     Read the input matrix from this file.
