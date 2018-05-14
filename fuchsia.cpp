@@ -960,6 +960,7 @@ struct transformation {
     transformation(unsigned size) : components(), size(size) {}
     pfmatrix apply(const pfmatrix &m) const;
     matrix to_matrix() const;
+    matrix to_inverse_matrix() const;
     transformation widen(unsigned size, unsigned offset) const;
     void add_constant_t(const matrix &l, const matrix &r);
     void add_balance_t(const matrix &p, const ex &x1, const ex &x2, const ex &x);
@@ -1025,6 +1026,33 @@ transformation::to_matrix() const
             m *= unit_matrix(size) +
                     pow(c.second.op(3) - c.second.op(1), c.second.op(2))*
                         c.second.op(0);
+            break;
+        }
+    }
+    return ex_to_matrix(m);
+}
+
+matrix
+transformation::to_inverse_matrix() const
+{
+    ex balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x);
+    ex m = unit_matrix(size);
+    for (const auto &c : components) {
+        switch (c.first) {
+        case tk_constant:
+            m = c.second.op(0)*m;
+            break;
+        case tk_balance:
+            m = balance_t_matrix(
+                    ex_to_matrix(c.second.op(0)),
+                    c.second.op(2),
+                    c.second.op(1),
+                    c.second.op(3))*m;
+            break;
+        case tk_off_diagonal:
+            m = (unit_matrix(size) -
+                    pow(c.second.op(3) - c.second.op(1), c.second.op(2))*
+                        c.second.op(0))*m;
             break;
         }
     }

@@ -59,7 +59,8 @@ main(int argc, char *argv[])
     const char *var_eps_name = "eps";
     const char *matrix_m_path = NULL;
     const char *matrix_t_path = NULL;
-    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:s:")) != -1;) {
+    const char *matrix_i_path = NULL;
+    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:i:s:")) != -1;) {
         switch (opt) {
         case 'h': usage(); return 0;
         case 'v': log_verbose = true; break;
@@ -68,6 +69,7 @@ main(int argc, char *argv[])
         case 'e': var_eps_name = optarg; break;
         case 'm': matrix_m_path = optarg; break;
         case 't': matrix_t_path = optarg; break;
+        case 'i': matrix_i_path = optarg; break;
         default: return 1;
         }
     }
@@ -75,6 +77,7 @@ main(int argc, char *argv[])
     argv += optind;
     matrix matrix_m(0, 0);
     matrix matrix_t(0, 0);
+    matrix matrix_i(0, 0);
     symbol x(var_x_name);
     symbol y(var_y_name);
     symbol eps(var_eps_name);
@@ -114,6 +117,7 @@ main(int argc, char *argv[])
         block_triangular_permutation btp(ms.first);
         matrix_m = btp.t().transpose().mul(ms.first).mul(btp.t());
         matrix_t = btp.t();
+        matrix_i = btp.t().transpose();
     }
     else if ((argc == 2) && !strcmp(argv[0], "fuchsify")) {
         auto ms = load_matrix(argv[1], vars);
@@ -121,6 +125,7 @@ main(int argc, char *argv[])
         auto r = fuchsify(pfm);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
+        matrix_i = r.second.to_inverse_matrix();
     }
     else if ((argc == 2) && !strcmp(argv[0], "normalize")) {
         auto ms = load_matrix(argv[1], vars);
@@ -128,6 +133,7 @@ main(int argc, char *argv[])
         auto r = normalize(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
+        matrix_i = r.second.to_inverse_matrix();
     }
     else if ((argc == 2) && !strcmp(argv[0], "factorize")) {
         auto ms = load_matrix(argv[1], vars);
@@ -135,6 +141,7 @@ main(int argc, char *argv[])
         auto r = factorize(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
+        matrix_i = r.second.to_inverse_matrix();
     }
     else if ((argc == 2) && !strcmp(argv[0], "reduce")) {
         auto ms = load_matrix(argv[1], vars);
@@ -142,6 +149,7 @@ main(int argc, char *argv[])
         auto r = reduce(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
+        matrix_i = r.second.to_inverse_matrix();
     }
     else if ((argc >= 3) && !strcmp(argv[0], "transform")) {
         matrix m;
@@ -173,6 +181,7 @@ main(int argc, char *argv[])
     }
     if (matrix_m.nops() > 0) {
         if (matrix_m_path != NULL) {
+            logi("Saving the matrix to {}", matrix_m_path);
             save_matrix(matrix_m_path, matrix_m);
         } else {
             save_matrix(cout, matrix_m);
@@ -181,9 +190,18 @@ main(int argc, char *argv[])
     }
     if (matrix_t.nops() > 0) {
         if (matrix_t_path != NULL) {
+            logi("Saving the transformation to {}", matrix_t_path);
             save_matrix(matrix_t_path, matrix_t);
         } else {
-            logi("not saving the transformation matrix (no -t argument)");
+            logi("Not saving the transformation matrix (no -t argument)");
+        }
+    }
+    if (matrix_i.nops() > 0) {
+        if (matrix_i_path != NULL) {
+            logi("Saving the inverse transformation to {}", matrix_i_path);
+            save_matrix(matrix_i_path, matrix_i);
+        } else {
+            logi("Not saving the inverse transformation matrix (no -i argument)");
         }
     }
     return 0;
