@@ -631,6 +631,9 @@ pfmatrix::pfmatrix(const matrix &m, const symbol &x)
     : nrows(m.rows()), ncols(m.cols()), x(x)
 {
     LOGME;
+    if (!m.has(x)) {
+        logi("warning: matrix does not contain variable {}", x);
+    }
     for (unsigned i = 0; i < nrows; i++) {
         logd("converting row {}", i);
         for (unsigned j = 0; j < ncols; j++) {
