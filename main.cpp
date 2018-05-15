@@ -13,19 +13,32 @@ Ss{COMMANDS}
         Show a description of a given matrix.
 
     Cm{reduce} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
-        Find an epsilon form of the given matrix.
+        Find an epsilon form of the given matrix. Internally
+        this is a combination of Cm{reduce-diagonal-blocks},
+        Cm{fuchsify-off-diagonal-blocks} and Cm{factorize}.
+
+    Cm{reduce-diagonal-blocks} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
+        Transform the matrix into block-triangular form and reduce the diagonal
+        blocks into epsilon form.
+
+    Cm{fuchsify-off-diagonal-blocks} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
+        Transform the off-diagonal blocks of a block-triangular matrix into
+        Fuchsian form, assuming the diagonal blocks are already in epsilon
+        form, thus making the whole matrix normalized Fuchsian.
+
+    Cm{factorize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
+        Find a transformation that will make a given normalized Fuchsian matrix
+        proportional to the infinitesimal parameter.
 
     Cm{fuchsify} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find a transformation that will transform a given matrix into Fuchsian
-        form.
+        form. This is less efficient than block-based commands, because it
+        effectively treats the whole matrix as one big block.
 
     Cm{normalize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find a transformation that will transform a given Fuchsian matrix into
-        normalized form.
-
-    Cm{factorize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
-        Find a transformation that will make a given normalized matrix
-        proportional to the infinitesimal parameter.
+        normalized form. This is less efficient than block-based commands,
+        because it effectively treats the whole matrix as one big block.
 
     Cm{sort} [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find a block-triangular form of the given matrix by shuffling.
@@ -177,6 +190,22 @@ main(int argc, char *argv[])
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = reduce(pfm, eps);
+        matrix_m = r.first.to_matrix();
+        matrix_t = r.second.to_matrix();
+        matrix_i = r.second.to_inverse_matrix();
+    }
+    else if ((argc == 2) && !strcmp(argv[0], "reduce-diagonal-blocks")) {
+        auto ms = load_matrix(argv[1], vars);
+        pfmatrix pfm(ms.first, x);
+        auto r = reduce_diagonal_blocks(pfm, eps);
+        matrix_m = r.first.to_matrix();
+        matrix_t = r.second.to_matrix();
+        matrix_i = r.second.to_inverse_matrix();
+    }
+    else if ((argc == 2) && !strcmp(argv[0], "fuchsify-off-diagonal-blocks")) {
+        auto ms = load_matrix(argv[1], vars);
+        pfmatrix pfm(ms.first, x);
+        auto r = fuchsify_off_diagonal_blocks(pfm);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
