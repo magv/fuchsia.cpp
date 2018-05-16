@@ -2493,11 +2493,13 @@ factorize(const pfmatrix &m, const symbol &eps)
     matrix t = matrix(m.nrows, m.nrows, tmp);
     symbol mu("MU");
     lst eqs;
+    int nresidues = 0;
     for (const auto &kv : m.residues) {
         const auto &ki = kv.first.second;
         const auto &ci = kv.second;
         if (ci.is_zero_matrix()) continue;
         assert(ki == -1);
+        nresidues++;
         matrix ci_eps = ci.mul_scalar(1/eps);
         matrix ci_mu(ci_eps.rows(), ci_eps.cols());
         for (unsigned i = 0; i < ci_eps.nops(); i++) {
@@ -2507,6 +2509,19 @@ factorize(const pfmatrix &m, const symbol &eps)
         for (unsigned i = 0; i < eq.nops(); i++) {
             const ex &e = eq.op(i);
             if (!e.is_zero()) eqs.append(e == 0);
+        }
+    }
+    if (nresidues == 1) {
+        logd("Only one residue, let's try using Jordan form");
+        for (const auto &kv : m.residues) {
+            const auto &ci = kv.second;
+            if (ci.is_zero_matrix()) continue;
+            matrix j = jordan(ci.mul_scalar(1/eps)).first;
+            matrix ij = j.inverse();
+            logi("Use constant transformation:\n{}", j);
+            transformation t_(m.nrows);
+            t_.add_constant_t(ij, j);
+            return make_pair(m.with_constant_t(ij, j), t_);
         }
     }
     logd("solving {} linear equations in {} variables", eqs.nops(), tmp.nops());

@@ -510,6 +510,22 @@ TEST_CASE("jordan 3") {
     REQUIRE(q.rank() == m.rows());
 }
 
+TEST_CASE("factorize, 1 residue") {
+    symbol x("x"), eps("eps"), a("a"), b("b");
+    matrix m = {
+        {eps*a, 1, 0, 0, 0}, 
+        {0, eps*a, 0, 0, 0}, 
+        {0, 0, eps*b, 1, 0},
+        {0, 0, 0, eps*b, 0},
+        {0, 0, 0, 0, eps*b}
+    };
+    pfmatrix pfm(m.mul_scalar(1/x), x);
+    auto mt = factorize(pfm, eps);
+    REQUIRE(is_factorized(mt.first, eps));
+    auto pfm2 = mt.second.apply(pfm);
+    REQUIRE(ratcan(mt.first.to_matrix()) == ratcan(pfm2.to_matrix()));
+}
+
 TEST_CASE("vspace contains") {
     symbol x("x"), y("y"), z("z"), a("a"), c("c");
     vspace vs1(matrix({{-(x-z)*(c*z-3*c)*(-2+z),-a*(x-z)*c,-(x-z)*(-2+z)*c,y*(-2+z)*c,0,-(x-z)*(-5+z*z-4*z)*(-2+z)}}));
