@@ -2505,7 +2505,8 @@ factorize(const pfmatrix &m, const symbol &eps)
         }
         matrix eq = ci_eps.mul(t).sub(t.mul(ci_mu));
         for (unsigned i = 0; i < eq.nops(); i++) {
-            eqs.append(eq.op(i) == 0);
+            const ex &e = eq.op(i);
+            if (!e.is_zero()) eqs.append(e == 0);
         }
     }
     logd("solving {} linear equations in {} variables", eqs.nops(), tmp.nops());
