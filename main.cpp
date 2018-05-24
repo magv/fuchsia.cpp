@@ -355,7 +355,7 @@ main(int argc, char *argv[])
             logi("Saving the inverse transformation to {}", matrix_i_path);
             save_matrix(matrix_i_path, matrix_i);
         } else {
-            logi("Not saving the inverse transformation matrix (no -i argument)");
+            logd("Not saving the inverse transformation matrix (no -i argument)");
         }
     }
     return 0;
