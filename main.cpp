@@ -49,6 +49,11 @@ Ss{COMMANDS}
     Cm{changevar} [Fl{-x} Ar{name}] [Fl{-y} Ar{name}] [Fl{-m} Ar{path}] Ar{matrix} Ar{expr}
         Perform a change of variable from x to y, such that x=expr(y).
 
+    Cm{suggest-changevar} [Fl{-x} Ar{name}] [Fl{-y} Ar{name}] Ar{matrix}
+        Suggest a rational change of variable that will transform residue
+        eigenvalues of the form n/2+k*eps into n+k*eps, thus making it possible
+        to find an epsilon form of the matrix.
+
 Ss{OPTIONS}
     Fl{-h}         Show this help message.
     Fl{-v}         Print a more verbose log.
@@ -69,6 +74,18 @@ Ss{AUTHORS}
 )";
 
 static bool COLORS = !!isatty(STDOUT_FILENO);
+
+/* Return a mapping of the form (A*x+B)/(C*x+D) that maps
+ * x=0 into a, x=1 into b, x=infinity into c.
+ */
+ex
+invmoebius(const ex &x, const ex &a, const ex &b, const ex &c)
+{
+    if (a == infinity) return c + (b - c)/x;
+    if (b == infinity) return (c*x - a)/(x - 1);
+    if (c == infinity) return a + (b - a)*x;
+    return ((c - b)*a + (b - a)*c*x)/((c - b) + (b - a)*x);
+}
 
 void
 usage()
@@ -227,6 +244,84 @@ main(int argc, char *argv[])
         auto xsubs = reader(argv[2]);
         matrix m2 = ex_to_matrix(ms.first.subs(exmap{{x, xsubs}})).mul_scalar(xsubs.diff(y));
         matrix_m = pfmatrix(m2, y).to_matrix();
+    }
+    else if ((argc == 2) && !strcmp(argv[0], "suggest-changevar")) {
+        auto ms = load_matrix(argv[1], vars);
+        pfmatrix pfm(ms.first, x);
+        exset halfpoints;
+        for (auto &&kv : pfm.residues) {
+            const auto &pi = kv.first.first;
+            const auto &ci = kv.second;
+            for (const auto &ev : eigenvalues(ci)) {
+                const auto &eval = ev.first;
+                ex ev0 = eval.subs(exmap{{eps, 0}}, subs_options::no_pattern);
+                assert(is_a<numeric>(ev0));
+                numeric ev0n = ex_to<numeric>(ev0);
+                numeric den = ev0n.denom();
+                if (den == 1) { continue; }
+                else if (den == 2) {
+                    logi("Found a half-integer point at {}={} with eigenvalue {}", x, pi, eval);
+                    halfpoints.insert(pi);
+                }
+                else assert(false);
+            }
+        }
+        matrix c0inf = c0_infinity(pfm);
+        int infinity_too = 0;
+        for (const auto &ev : eigenvalues(c0inf)) {
+            const auto &eval = ev.first;
+            ex ev0 = eval.subs(exmap{{eps, 0}}, subs_options::no_pattern);
+            assert(is_a<numeric>(ev0));
+            numeric ev0n = ex_to<numeric>(ev0);
+            numeric den = ev0n.denom();
+            if (den == 1) { }
+            else if (den == 2) {
+                logi("Found a half-integer point at {}={} with eigenvalue {}", x, infinity, eval);
+                infinity_too = 1;
+            }
+            else assert(false);
+        }
+        logi("The matrix has {} half-integer points in total", halfpoints.size() + infinity_too);
+        if (halfpoints.size() + infinity_too == 0) {
+            logi("No variable change is necessary");
+        }
+        else if (halfpoints.size() + infinity_too == 1) {
+            assert(!"Is only one half-integer point even possible?");
+        }
+        else if (halfpoints.size() == 2 && !infinity_too) {
+            auto &&it = halfpoints.begin();
+            ex a = *it++, b = *it++;
+            logi("Any of these variable changes from {} to {} should help:\n{} = {}\n{} = {}",
+                    x, y,
+                    x, (a + b*y*y)/(y*y + 1), // invmoebius(y*y, a, (a + b)/2, b)
+                    x, (b + a*y*y)/(y*y + 1)); // invmoebius(y*y, b, (a + b)/2, a)
+        }
+        else if (halfpoints.size() == 2 && infinity_too) {
+            auto &&it = halfpoints.begin();
+            ex a = *it++, b = *it++;
+            logi("Any of these variable changes from {} to {} should help:\n{} = {}\n{} = {}",
+                    x, y,
+                    x, invmoebius(pow((y*y + 1)/(2*y), 2), a, b, infinity),
+                    x, invmoebius(pow((y*y + 1)/(2*y), 2), b, a, infinity));
+        }
+        else if (halfpoints.size() == 3 && !infinity_too) {
+            auto &&it = halfpoints.begin();
+            ex a = *it++, b = *it++, c = *it++;
+            logi("Any of these variable changes from {} to {} should help:\n"
+                    "{} = {}\n{} = {}\n{} = {}\n{} = {}\n{} = {}\n{} = {}",
+                    x, y,
+                    x, invmoebius(pow((y*y+1)/(2*y), 2), a, b, c),
+                    x, invmoebius(pow((y*y+1)/(2*y), 2), c, a, b),
+                    x, invmoebius(pow((y*y+1)/(2*y), 2), b, c, a),
+                    x, invmoebius(pow((y*y+1)/(2*y), 2), a, c, b),
+                    x, invmoebius(pow((y*y+1)/(2*y), 2), b, a, c),
+                    x, invmoebius(pow((y*y+1)/(2*y), 2), c, b, a));
+        }
+        else {
+            loge("The matrix has {} half-integer points in total, "
+                    "no rational variable change can cure that",
+                    halfpoints.size() + infinity_too);
+        }
     }
     else if (argc == 0) {
         cerr << "fuchsia: no command provided (use -h to see usage)" << endl;
