@@ -55,14 +55,15 @@ Ss{COMMANDS}
         to find an epsilon form of the matrix.
 
 Ss{OPTIONS}
-    Fl{-h}         Show this help message.
-    Fl{-v}         Print a more verbose log.
     Fl{-x} Ar{name}    Use this name for the free variable (default: x).
     Fl{-y} Ar{name}    Use this name for the new free variable (default: y).
     Fl{-e} Ar{name}    Use this name for the infinitesimal parameter (default: eps).
     Fl{-m} Ar{path}    Save the resulting matrix into this file.
     Fl{-t} Ar{path}    Save the resulting transformation into this file.
     Fl{-i} Ar{path}    Save the inverse transformation into this file.
+    Fl{-v}         Print a more verbose log.
+    Fl{-V}         Print version information.
+    Fl{-h}         Show this help message.
 
 Ss{ARGUMENTS}
     Ar{matrix}     Read the input matrix from this file.
@@ -111,6 +112,14 @@ usage()
     cout << p;
 }
 
+void
+version()
+{
+    cout << 
+#include VERSION_H
+        ;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -120,9 +129,10 @@ main(int argc, char *argv[])
     const char *matrix_m_path = NULL;
     const char *matrix_t_path = NULL;
     const char *matrix_i_path = NULL;
-    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:i:s:")) != -1;) {
+    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:i:s:V")) != -1;) {
         switch (opt) {
         case 'h': usage(); return 0;
+        case 'V': version(); return 0;
         case 'v': log_verbose = true; break;
         case 'x': var_x_name = optarg; break;
         case 'y': var_y_name = optarg; break;
