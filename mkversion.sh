@@ -28,7 +28,7 @@ pkgid() {
 }
 
 cat <<EOF
-Fuchia, $(gitid .)
+Fuchsia, $(gitid .)
 Libraries:
   GiNaC $(gitver "$GINAC"), $(gitid "$GINAC")
   CLN $(gitver "$CLN"), $(gitid "$CLN")
