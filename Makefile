@@ -13,12 +13,14 @@ XLDFLAGS_STATIC=${XLDFLAGS}
 
 all: build/fuchsia
 
-build/fuchsia: build/.dir main.cpp fuchsia.cpp Makefile version.h
-	${CXX} ${XCFLAGS} -DVERSION_H=\"version.h\" -o $@ main.cpp ${XLDFLAGS}
+build/fuchsia: build/.dir main.cpp fuchsia.cpp Makefile
+	date '+static const char VERSION[] = "Fuchsia, built on %Y-%m-%d\n";' >build/version.h
+	${CXX} ${XCFLAGS} -include build/version.h -o $@ main.cpp ${XLDFLAGS}
 
-build/fuchsia.static: build/.dir main.cpp fuchsia.cpp Makefile version_static.h
-	${CXX} ${XCFLAGS_STATIC} -DVERSION_H=\"version_static.h\" -o $@ main.cpp ${XLDFLAGS_STATIC}
-	upx --best "$@"
+build/fuchsia.static: build/.dir main.cpp fuchsia.cpp Makefile
+	env CLN="${CLNSRC}" GINAC="${GINACSRC}" ./mkversion.sh > build/version_static.h
+	${CXX} ${XCFLAGS_STATIC} -include build/version_static.h -o $@ main.cpp ${XLDFLAGS_STATIC}
+	upx -best "$@"
 
 test: build/test
 	@build/test -a
@@ -33,15 +35,7 @@ build/.dir:
 	ln -sf "$$(mktemp -d)" build
 	touch $@
 
-version.h: phony
-	date '+"Fuchsia, built on %Y-%m-%d\n"' > $@
-
-version_static.h: phony
-	printf "%s" 'R"(' > $@
-	env CLN="${CLNSRC}" GINAC="${GINACSRC}" ./mkversion.sh >> $@
-	printf "%s" ')"' >> $@
-
 clean: phony
-	rm -rf $$(readlink -f build) build version.h version_static.h
+	rm -rf $$(readlink -f build) build
 
 phony:;

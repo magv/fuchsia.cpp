@@ -28,6 +28,7 @@ pkgid() {
 }
 
 cat <<EOF
+static const char VERSION[] = R"(\
 Fuchsia, $(gitid .)
 Libraries:
   GiNaC $(gitver "$GINAC"), $(gitid "$GINAC")
@@ -39,4 +40,5 @@ Compiler:
   GCC $(pkgid gcc-c++ g++)
 Compressor:
   UPX $(pkgid upx upx-ucl)
+)";
 EOF

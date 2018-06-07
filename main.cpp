@@ -112,14 +112,6 @@ usage()
     cout << p;
 }
 
-void
-version()
-{
-    cout << 
-#include VERSION_H
-        ;
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -132,7 +124,7 @@ main(int argc, char *argv[])
     for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:i:s:V")) != -1;) {
         switch (opt) {
         case 'h': usage(); return 0;
-        case 'V': version(); return 0;
+        case 'V': cout << VERSION; return 0;
         case 'v': log_verbose = true; break;
         case 'x': var_x_name = optarg; break;
         case 'y': var_y_name = optarg; break;
