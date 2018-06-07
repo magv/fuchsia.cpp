@@ -21,7 +21,7 @@ build/fuchsia.static: build/.dir main.cpp fuchsia.cpp Makefile version_static.h
 	upx --best "$@"
 
 test: build/test
-	@build/test
+	@build/test -a
 
 build/test: build/testrunner.o tests.cpp fuchsia.cpp
 	${CXX} ${XCFLAGS} -o $@ build/testrunner.o tests.cpp ${XLDFLAGS}
