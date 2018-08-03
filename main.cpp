@@ -235,7 +235,7 @@ main(int argc, char *argv[])
         for (int i = 2; i < argc; i++) {
             matrix t;
             tie(t, vars) = load_matrix(argv[i], vars);
-            m = matrix_inverse(t).mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
+            m = t.inverse().mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
         }
         pfmatrix pfm(m, x);
         matrix_m = pfm.to_matrix();

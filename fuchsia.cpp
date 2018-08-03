@@ -536,7 +536,7 @@ partial_fraction_iter(const ex &e, const symbol &x, F yield)
     for (int k = deg_lo; k <= deg_hi; k++) {
         eqlist.append(eq.coeff(x, k) == 0);
     }
-    ex sol = lsolve(eqlist, clist, solve_algo::gauss);
+    ex sol = lsolve(eqlist, clist);
     q = q.expand().collect(x);
     for (int k = q.ldegree(x); k <= q.degree(x); k++) {
         ex c = q.coeff(x, k);
@@ -971,8 +971,7 @@ struct transformation {
 matrix
 transform(const matrix &m, const matrix &t, const symbol &x)
 {
-    matrix matrix_inverse(const matrix m, unsigned algo = solve_algo::gauss);
-    return matrix_inverse(t).mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
+    return t.inverse().mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
 }
 
 pfmatrix
@@ -1724,7 +1723,7 @@ nullspace(const matrix &m)
     }
     // Solve M*V = 0
     matrix zero(nrows, 1);
-    matrix s = normal(m).solve(v, zero, solve_algo::gauss);
+    matrix s = normal(m).solve(v, zero);
     matrix coeff(ncols, ncols);
     for (unsigned k = 0; k < ncols; k++) {
         for (unsigned i = 0; i < ncols; i++) {
@@ -1954,7 +1953,7 @@ alg1(matrix l0, const vector<int> &jcs)
             matrix tmpi = matrix_cut(tmp, 0, i, 0, 1);
             matrix lxi = matrix_cut(lx, 0, n, i, 1);
             try {
-                sol = lxb4i.solve(tmpi, lxi, solve_algo::gauss);
+                sol = lxb4i.solve(tmpi, lxi);
                 //assert(normal(lxb4i.mul(sol).sub(lxi)).is_zero_matrix());
                 break;
             } catch (const std::runtime_error &e) {
@@ -1991,29 +1990,6 @@ alg1(matrix l0, const vector<int> &jcs)
     return make_pair(s, d);
 }
 
-matrix
-matrix_inverse(const matrix m, unsigned algo = solve_algo::gauss)
-{
-    unsigned row = m.rows();
-    unsigned col = m.cols();
-    assert(row == col);
-    matrix identity = identity_matrix(row);
-    matrix vars(row,col);
-    for (unsigned r=0; r<row; ++r)
-        for (unsigned c=0; c<col; ++c)
-            vars(r,c) = symbol();
-    matrix sol(row,col);
-    try {
-        sol = m.solve(vars, identity, algo);
-    } catch (const std::runtime_error & e) {
-        if (e.what()==std::string("matrix::solve(): inconsistent linear system"))
-            throw (std::runtime_error("matrix::inverse(): singular matrix"));
-        else
-            throw;
-    }
-    return sol;
-}
-
 pair<matrix, matrix>
 alg1x(const matrix &a0, const matrix &a1)
 {
@@ -2024,7 +2000,7 @@ alg1x(const matrix &a0, const matrix &a1)
     // doesn't fail when dealing with un-normal zeros.
     const matrix &u = normal(ucs.first);
     const vector<int> &jcs = ucs.second;
-    matrix invu = matrix_inverse(u);
+    matrix invu = u.inverse();
     unsigned ncells = jcs.size();
     vector<int> jce(ncells);
     vector<int> jcb(ncells);
@@ -2065,7 +2041,7 @@ alg1x(const matrix &a0, const matrix &a1)
         }
     }
     matrix ut = u.mul(ie);
-    matrix invut = matrix_inverse(ie).mul(invu);
+    matrix invut = ie.inverse().mul(invu);
     int ns = 0;
     for (unsigned i = 0; i < ncells; i++) {
         if (s[i]) ns++;
@@ -2140,22 +2116,6 @@ balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x)
     }
 }
 
-/* This function is needed because matrix::rank() uses Bareiss
- * elimination, which is too slow for our sparse matrices.
- */
-unsigned
-matrix_rank(const matrix &m)
-{
-	matrix mm = m;
-    echelon_form_gauss(mm);
-	unsigned r = mm.rows()*mm.cols();
-	while (r--) {
-		if (!mm.op(r).is_zero())
-			return 1+r/mm.cols();
-	}
-	return 0;
-}
-
 pair<pfmatrix, transformation>
 fuchsify(const pfmatrix &m)
 {
@@ -2206,7 +2166,7 @@ fuchsify(const pfmatrix &m)
             if (c.is_zero_matrix()) continue;
             if (abs(ki + 1) > 0) {
                 logd("- pole with power {} at {}={}, complexity={}, residue rank={}",
-                        ki, pfm.x, xi, complexity(c), matrix_rank(c));
+                        ki, pfm.x, xi, complexity(c), c.rank());
             } else {
                 logd("- pole with power {} at {}={}, complexity={}",
                         ki, pfm.x, xi, complexity(c));
@@ -2525,7 +2485,7 @@ factorize(const pfmatrix &m, const symbol &eps)
         }
     }
     logd("solving {} linear equations in {} variables", eqs.nops(), tmp.nops());
-    ex sol = lsolve(eqs, tmp, solve_algo::gauss);
+    ex sol = lsolve(eqs, tmp);
     logd("found a solution");
     matrix_map_inplace(t, [&](auto &&e) { return e.subs(sol); });
     tmp.append(mu);
@@ -2539,7 +2499,7 @@ factorize(const pfmatrix &m, const symbol &eps)
             matrix st = matrix_map(t, [&](auto &&e) {
                 return normal(e.subs(map));
             });
-            matrix invst = normal(matrix_inverse(st));
+            matrix invst = normal(st.inverse());
             transformation t_(m.nrows);
             t_.add_constant_t(invst, st);
             logi("Use constant transformation:\n{}", st);
@@ -2690,7 +2650,7 @@ loop:;
                 for (unsigned i = 0; i < eqmx.nops(); i++) {
                     eq.append(eqmx.op(i) == 0);
                 }
-                ex sol = lsolve(eq, d_vars, solve_algo::gauss);
+                ex sol = lsolve(eq, d_vars);
                 assert(sol.nops() == d_vars.nops());
                 matrix D(m.nrows, m.ncols);
                 for (unsigned i = 0; i < size1; i++) {
