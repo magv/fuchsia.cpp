@@ -11,9 +11,11 @@ faster and easies to use than the old one.
 
 The previous version can be found at [1].
 
-When compiled *Fuchsia* becomes a single executable. See the
-manual below for its usage. Also see the manual for the previous
-version at [2] for a discussion of the algorithms used.
+When compiled *Fuchsia* becomes a single executable. See the manual
+below for its usage. Also see the manual for the previous version
+at [2] for a discussion of the algorithms used. A precompiled
+and statically linked version of this executable can be found
+in the releases section on Github.
 
 * [1] https://github.com/gituliar/fuchsia/
 * [2] https://arxiv.org/abs/1701.04269
