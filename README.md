@@ -83,7 +83,7 @@ in the releases section on Github.
 * **suggest-changevar** [-x *name*] [-y *name*] *matrix*
 
   Suggest a rational change of variable that will transform residue
-  eigenvalues of the form n/2+k*eps into n+k*eps, thus making it possible
+  eigenvalues of the form `n/2 + k eps` into `n + k eps`, thus making it possible
   to find an epsilon form of the matrix.
 
 ## OPTIONS
@@ -132,7 +132,7 @@ in the releases section on Github.
 
 * *transform*
 
-  Read the transformation matrix from this file*.
+  Read the transformation matrix from this file.
 
 * *expr*
 
