@@ -30,11 +30,11 @@ log_adv(const char *fmt)
 {
     for (int i = 0; ; i++) {
         if (fmt[i] == '{') {
-            cout.write(fmt, i);
+            cerr.write(fmt, i);
             return fmt + i + 2;
         }
         if (fmt[i] == 0) {
-            cout.write(fmt, i);
+            cerr.write(fmt, i);
             return fmt + i;
         }
     }
@@ -54,12 +54,12 @@ log_print_start(const char *pre, const char *post)
 {
     auto t = chrono::steady_clock::now();
     auto dt = chrono::duration_cast<chrono::duration<double>>(t - _log_starttime).count();
-    cout << pre << std::fixed << std::setprecision(4) << dt << "s +";
-    cout << chrono::duration_cast<chrono::duration<double>>(t - _log_lasttime).count() << "s";
+    cerr << pre << std::fixed << std::setprecision(4) << dt << "s +";
+    cerr << chrono::duration_cast<chrono::duration<double>>(t - _log_lasttime).count() << "s";
     for (int i = 0; i < _log_depth; i++) {
-        cout << " *";
+        cerr << " *";
     }
-    cout << post;
+    cerr << post;
     _log_lasttime = t;
 }
 
@@ -67,14 +67,14 @@ template<typename T> const char *
 log_print_one(const char *fmt, const T &value)
 {
     fmt = log_adv(fmt);
-    log_format(cout, value);
+    log_format(cerr, value);
     return fmt;
 }
 
 void
 log_print_end(const char *fmt)
 {
-    cout << fmt << "\033[0m\n";
+    cerr << fmt << "\033[0m" << endl;
 }
 
 struct _sequencehack {
