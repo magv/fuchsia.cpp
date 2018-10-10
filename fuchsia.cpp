@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdio.h>
 #include <chrono>
 #include <fstream>
 #include <tuple>
@@ -322,8 +323,18 @@ save_matrix(ostream &f, const matrix &m)
 void
 save_matrix(const char *filename, const matrix &m)
 {
-    ofstream f(filename);
+    // Write to a temporary file, rename it to the correct location
+    // at the end. This is done so that if the filesystem has
+    // atomic renames, the resulting file would never contain
+    // partial output, even if Fuchsia was Ctrl-C'ed.
+    string tmpfilename = string(filename) + string(".tmp~");
+    ofstream f(tmpfilename);
     save_matrix(f, m);
+    f.close();
+    int r = rename(tmpfilename.c_str(), filename);
+    if (r != 0) {
+        throw system_error(r, system_category()); 
+    }
 }
 
 /* Divide one polynomial in x by another, return the quotient

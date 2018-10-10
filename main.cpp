@@ -345,16 +345,24 @@ main(int argc, char *argv[])
     }
     if (matrix_t.nops() > 0) {
         if (matrix_t_path != NULL) {
-            logi("Saving the transformation to {}", matrix_t_path);
+            logd("Saving the (unsimplified) transformation to {}", matrix_t_path);
             save_matrix(matrix_t_path, matrix_t);
+            logd("Simplifying the transformation...");
+            matrix t = normal(matrix_t);
+            logi("Saving the transformation to {}", matrix_t_path);
+            save_matrix(matrix_t_path, t);
         } else {
             logi("Not saving the transformation matrix (no -t argument)");
         }
     }
     if (matrix_i.nops() > 0) {
         if (matrix_i_path != NULL) {
-            logi("Saving the inverse transformation to {}", matrix_i_path);
+            logd("Saving the (unsimplified) inverse transformation to {}", matrix_i_path);
             save_matrix(matrix_i_path, matrix_i);
+            logd("Simplifying the inverse transformation...");
+            matrix i = normal(matrix_i);
+            logi("Saving the inverse transformation to {}", matrix_i_path);
+            save_matrix(matrix_i_path, i);
         } else {
             logd("Not saving the inverse transformation matrix (no -i argument)");
         }
