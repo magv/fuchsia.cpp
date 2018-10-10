@@ -1,4 +1,3 @@
-#include <unistd.h>
 #include "fuchsia.cpp"
 
 static const char usagetext[] = R"(
@@ -61,9 +60,10 @@ Ss{OPTIONS}
     Fl{-m} Ar{path}    Save the resulting matrix into this file.
     Fl{-t} Ar{path}    Save the resulting transformation into this file.
     Fl{-i} Ar{path}    Save the inverse transformation into this file.
+    Fl{-C}         Force colored output even stdout is not a tty.
     Fl{-v}         Print a more verbose log.
-    Fl{-V}         Print version information.
     Fl{-h}         Show this help message.
+    Fl{-V}         Print version information.
 
 Ss{ARGUMENTS}
     Ar{matrix}     Read the input matrix from this file.
@@ -73,8 +73,6 @@ Ss{ARGUMENTS}
 Ss{AUTHORS}
     Vitaly Magerya <vitaly.magerya@tx97.net>
 )";
-
-static bool COLORS = !!isatty(STDOUT_FILENO);
 
 /* Return a mapping of the form (A*x+B)/(C*x+D) that maps
  * x=0 into a, x=1 into b, x=infinity into c.
@@ -121,17 +119,18 @@ main(int argc, char *argv[])
     const char *matrix_m_path = NULL;
     const char *matrix_t_path = NULL;
     const char *matrix_i_path = NULL;
-    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:i:s:V")) != -1;) {
+    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:i:s:CV")) != -1;) {
         switch (opt) {
         case 'h': usage(); return 0;
         case 'V': cout << VERSION; return 0;
-        case 'v': log_verbose = true; break;
+        case 'v': VERBOSE = true; break;
         case 'x': var_x_name = optarg; break;
         case 'y': var_y_name = optarg; break;
         case 'e': var_eps_name = optarg; break;
         case 'm': matrix_m_path = optarg; break;
         case 't': matrix_t_path = optarg; break;
         case 'i': matrix_i_path = optarg; break;
+        case 'C': COLORS = true; break;
         default: return 1;
         }
     }

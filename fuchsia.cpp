@@ -2,12 +2,16 @@
 #include <ginac/parser.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <chrono>
 #include <fstream>
 #include <tuple>
 
 using namespace GiNaC;
 using namespace std;
+
+static bool COLORS = !!isatty(STDOUT_FILENO);
+static bool VERBOSE = true;
 
 /* LOGGING
  * ============================================================
@@ -18,8 +22,6 @@ using namespace std;
  * of kilolines of code, and your own sanity lost in the fight
  * versus byzantine template rules. Please don't.
  */
-
-bool log_verbose = false;
 
 static auto _log_starttime = chrono::steady_clock::now();
 static auto _log_lasttime = chrono::steady_clock::now();
@@ -74,7 +76,9 @@ log_print_one(const char *fmt, const T &value)
 void
 log_print_end(const char *fmt)
 {
-    cerr << fmt << "\033[0m" << endl;
+    cerr << fmt;
+    if (COLORS) cerr << "\033[0m";
+    cerr << endl;
 }
 
 struct _sequencehack {
@@ -94,13 +98,13 @@ log_fmt(const char *pre, const char *post, const char *fmt, const Args &...args)
 }
 
 /* Log an debug message. These can be suppressed by setting
- * log_verbose to false.
+ * VERBOSE to false.
  */
 template<typename... Args> static inline void
 logd(const char *fmt, const Args &...args)
 {
-    if (log_verbose) {
-        log_fmt("\033[2;37m[dbg ", "] ", fmt, args...);
+    if (VERBOSE) {
+        log_fmt(COLORS ? "\033[2;37m[dbg " : "[dbg ", "] ", fmt, args...);
     }
 }
 
@@ -109,7 +113,7 @@ logd(const char *fmt, const Args &...args)
 template<typename... Args> static inline void
 logi(const char *fmt, const Args &...args)
 {
-    log_fmt("\033[32m[inf ", "]\033[0m ", fmt, args...);
+    log_fmt(COLORS ? "\033[32m[inf " : "[inf ", COLORS ? "]\033[0m " : "] ", fmt, args...);
 }
 
 /* Log an error message.
@@ -117,7 +121,7 @@ logi(const char *fmt, const Args &...args)
 template<typename... Args> static inline void
 loge(const char *fmt, const Args &...args)
 {
-    log_fmt("\033[31m[err ", "] ", fmt, args...);
+    log_fmt(COLORS ? "\033[31m[err " : "[err ", "] ", fmt, args...);
 }
 
 template<typename F>
@@ -140,7 +144,7 @@ struct _scopeexithack {
     _log_depth++; \
     auto __log_f = [&]{ \
         _log_depth--; \
-        if (log_verbose) { \
+        if (VERBOSE) { \
             auto t = chrono::steady_clock::now(); \
             auto dt = chrono::duration_cast<chrono::duration<double>>(t - __log_t0).count(); \
             logd("< {}(+{}s)",__log_func, dt); \
