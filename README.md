@@ -9,9 +9,9 @@ feature being the support for unfactorizable polynomials of powers
 higher than one in the denominators. Otherwise this version is
 faster and easies to use than the old one.
 
-The previous version can be found at [1].
+The previous (Python) version can be found at [1].
 
-When compiled *Fuchsia* becomes a single executable. See the manual
+When compiled, *Fuchsia* becomes a single executable. See the manual
 below for its usage. Also see the manual for the previous version
 at [2] for a discussion of the algorithms used. A precompiled
 and statically linked version of this executable can be found
@@ -23,9 +23,11 @@ in the releases section on Github.
 # MANUAL
 
 ## NAME
+
 `fuchsia` -- transform linear differential equations into epsilon form.
 
 ## SYNOPSYS
+
 `fuchsia` [options] **command** *args* ...
 
 ## COMMANDS
@@ -37,8 +39,8 @@ in the releases section on Github.
 * **reduce** [-x *name*] [-e *name*] [-m *path*] [-t *path*] [-i *path*] *matrix*
 
   Find an epsilon form of the given matrix. Internally
-  this is a combination of reduce-diagonal-blocks,
-  fuchsify-off-diagonal-blocks and factorize.
+  this is a combination of **reduce-diagonal-blocks**,
+  **fuchsify-off-diagonal-blocks** and **factorize**.
 
 * **reduce-diagonal-blocks** [-x *name*] [-e *name*] [-m *path*] [-t *path*] [-i *path*] *matrix*
 
@@ -83,7 +85,7 @@ in the releases section on Github.
 * **suggest-changevar** [-x *name*] [-y *name*] *matrix*
 
   Suggest a rational change of variable that will transform residue
-  eigenvalues of the form `n/2 + k eps` into `n + k eps`, thus making it possible
+  eigenvalues of the form n/2+k×eps into n+k×eps, thus making it possible
   to find an epsilon form of the matrix.
 
 ## OPTIONS
@@ -112,17 +114,21 @@ in the releases section on Github.
 
   Save the inverse transformation into this file.
 
+* -C
+
+  Force colored output even stdout is not a tty.
+
 * -v
 
   Print a more verbose log.
 
-* -V
-
-  Print version information.
-
 * -h
 
   Show this help message.
+
+* -V
+
+  Print version information.
 
 ## ARGUMENTS
 
