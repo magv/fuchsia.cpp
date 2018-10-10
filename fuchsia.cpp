@@ -2663,7 +2663,7 @@ loop:;
                 }
                 lst eq;
                 for (unsigned i = 0; i < eqmx.nops(); i++) {
-                    eq.append(eqmx.op(i) == 0);
+                    eq.append(numer(eqmx.op(i)) == 0);
                 }
                 ex sol = lsolve(eq, d_vars);
                 assert(sol.nops() == d_vars.nops());
