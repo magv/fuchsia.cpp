@@ -3,7 +3,10 @@ gitver() {
 }
 
 gitid() {
-    git -C "$1" log -1 --date=format:'%Y-%m-%d' --format=format:'commit %h from %cd'
+    cidlong=$(git -C "$1" describe --always --abbrev=0 --exclude '*')
+    cidshort=$(git -C "$1" describe --always --exclude '*' --dirty=+)
+    date=$(git -C "$1" log -1 $cidlong --date=format:'%Y-%m-%d' --format=format:'%cd')
+    echo "commit $cidshort from $date"
 }
 
 pkgid_rpm() {
@@ -37,7 +40,7 @@ Libraries:
   glibc $(pkgid glibc libc6)
   libstdc++ $(pkgid libstdc++ libstdc++6)
 Compiler:
-  GCC $(pkgid gcc-c++ g++)
+  $($CXX --version | head -1)
 Compressor:
   UPX $(pkgid upx upx-ucl)
 )";

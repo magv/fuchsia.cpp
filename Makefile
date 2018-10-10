@@ -18,7 +18,7 @@ build/fuchsia: build/.dir main.cpp fuchsia.cpp Makefile
 	${CXX} ${XCFLAGS} -include build/version.h -o $@ main.cpp ${XLDFLAGS}
 
 build/fuchsia.static: build/.dir main.cpp fuchsia.cpp Makefile
-	env CLN="${CLNSRC}" GINAC="${GINACSRC}" ./mkversion.sh > build/version_static.h
+	env CLN="${CLNSRC}" GINAC="${GINACSRC}" CXX="${CXX}" ./mkversion.sh > build/version_static.h
 	${CXX} ${XCFLAGS_STATIC} -include build/version_static.h -o $@ main.cpp ${XLDFLAGS_STATIC}
 	upx --best "$@"
 
