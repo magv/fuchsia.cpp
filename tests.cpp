@@ -9,21 +9,40 @@ TEST_CASE("eigenvectors") {
         {x, 0, x+1},
     };
     for (const ex evalue : vector<ex>({x, x+1})) {
-        SECTION("eigenvectors right") {
-            for (const matrix &ev : eigenvectors_right(m, evalue)) {
-                ex mm = normal(m.mul(ev) - evalue*ev);
-                REQUIRE(mm.is_zero_matrix());
-                mm = normal(m.mul(ev) - 2*evalue*ev);
-                REQUIRE(!mm.is_zero_matrix());
-            }
+        for (const matrix &ev : eigenvectors_right(m, evalue)) {
+            ex mm = normal(m.mul(ev).sub(ev.mul_scalar(evalue)));
+            REQUIRE(mm.is_zero_matrix());
+            mm = normal(m.mul(ev).sub(ev.mul_scalar(2*evalue)));
+            REQUIRE(!mm.is_zero_matrix());
         }
-        SECTION("eigenvectors left") {
-            for (const matrix &ev : eigenvectors_left(m, evalue)) {
-                ex mm = normal(ev.mul(m) - evalue*ev);
-                REQUIRE(mm.is_zero_matrix());
-                mm = normal(ev.mul(m) - 2*evalue*ev);
-                REQUIRE(!mm.is_zero_matrix());
-            }
+        for (const matrix &ev : eigenvectors_left(m, evalue)) {
+            ex mm = normal(ev.mul(m).sub(ev.mul_scalar(evalue)));
+            REQUIRE(mm.is_zero_matrix());
+            mm = normal(ev.mul(m).sub(ev.mul_scalar(2*evalue)));
+            REQUIRE(!mm.is_zero_matrix());
+        }
+    }
+}
+
+TEST_CASE("eigenvectors 2") {
+    symbol x("x");
+    matrix m = {
+        {-ex(3)/2, -ex(3)/2*(8*x*x+5*x)/(2+3*x), (14*x*x+16*x*x*x+3*x)/(2+3*x)},
+        {ex(1)/2*(6+24*x*x+25*x)/x, ex(11)/2+16*x, -3-16*x*x-14*x},
+        {2/(1+2*x)*(2+3*x), 6/(1+2*x)*x, 0}
+    };
+    for (const ex evalue : vector<ex>({4*x, 1 + 4*x, 3 + 8*x})) {
+        for (const matrix &ev : eigenvectors_right(m, evalue)) {
+            ex mm = normal(m.mul(ev).sub(ev.mul_scalar(evalue)));
+            REQUIRE(mm.is_zero_matrix());
+            mm = normal(m.mul(ev).sub(ev.mul_scalar(2*evalue)));
+            REQUIRE(!mm.is_zero_matrix());
+        }
+        for (const matrix &ev : eigenvectors_left(m, evalue)) {
+            ex mm = normal(ev.mul(m).sub(ev.mul_scalar(evalue)));
+            REQUIRE(mm.is_zero_matrix());
+            mm = normal(ev.mul(m).sub(ev.mul_scalar(2*evalue)));
+            REQUIRE(!mm.is_zero_matrix());
         }
     }
 }
