@@ -87,6 +87,20 @@ invmoebius(const ex &x, const ex &a, const ex &b, const ex &c)
 }
 
 void
+print_matrix_shape(ostream &f, const matrix &m, const char *ident)
+{
+    for (unsigned i = 0; i < m.rows(); i++) {
+        f << ident;
+        for (unsigned j = 0; j < m.cols(); j++) {
+            if (COLORS && (i == j)) f << "\033[34m";
+            f << (m(i, j).is_zero() ? '.' : '#');
+            if (COLORS && (i == j)) f << "\033[0m";
+        }
+        f << endl;
+    }
+}
+
+void
 usage()
 {
     const char *p = strchr(usagetext, '\n') + 1;
@@ -152,6 +166,8 @@ main(int argc, char *argv[])
         cout << "Matrix size: " << ms.first.rows() << "x" << ms.first.cols() << endl;
         pfmatrix pfm(ms.first, x);
         cout << "Matrix complexity: " << complexity(pfm) << endl;
+        cout << "Matrix shape: " << endl;
+        print_matrix_shape(cout, pfm.to_matrix(), "  ");
         cout << "Matrix expansion:" << endl;
         for (const auto kv : pfm.residues) {
             const auto &xi = kv.first.first;
@@ -163,6 +179,8 @@ main(int argc, char *argv[])
             for (auto ev : eigenvalues(c, true)) {
                 cout << "    e-value^" << ev.second << ": " << ev.first << endl;
             }
+            cout << "    shape: " << endl;
+            print_matrix_shape(cout, c, "      ");
         }
         matrix c = normal(c0_infinity(pfm));
         if (!c.is_zero_matrix()) {
@@ -171,11 +189,14 @@ main(int argc, char *argv[])
             for (auto ev : eigenvalues(c, true)) {
                 cout << "    e-value^" << ev.second << ": " << ev.first << endl;
             }
+            cout << "    shape: " << endl;
+            print_matrix_shape(cout, c, "      ");
         }
     }
     else if ((argc == 2) && !strcmp(argv[0], "sort")) {
         auto ms = load_matrix(argv[1], vars);
         block_triangular_permutation btp(ms.first);
+        logi("Block sizes: {}", btp.block_size());
         matrix_m = btp.t().transpose().mul(ms.first).mul(btp.t());
         matrix_t = btp.t();
         matrix_i = btp.t().transpose();
