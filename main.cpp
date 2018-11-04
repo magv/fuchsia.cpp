@@ -310,6 +310,13 @@ main(int argc, char *argv[])
         else if (halfpoints.size() + infinity_too == 1) {
             assert(!"Is only one half-integer point even possible?");
         }
+        else if (halfpoints.size() == 1 && infinity_too) {
+            auto &&it = halfpoints.begin();
+            ex a = *it++;
+            logi("This variable change from {} to {} should help:\n{} = {}",
+                    x, y,
+                    x, a + y*y); // invmoebius(y*y, a, a + 1, infinity)
+        }
         else if (halfpoints.size() == 2 && !infinity_too) {
             auto &&it = halfpoints.begin();
             ex a = *it++, b = *it++;
