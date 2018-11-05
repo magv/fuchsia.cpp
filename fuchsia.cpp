@@ -1922,159 +1922,6 @@ dual_basis_spanning_left_invariant_subspace(const matrix &m, const matrix &u)
  * ============================================================
  */
 
-pair<vector<int>, matrix>
-alg1(matrix l0, const vector<int> &jcs)
-{
-    LOGME;
-    unsigned n = l0.rows();
-    vector<int> s(n);
-    matrix d(n, n);
-    matrix ident = identity_matrix(n);
-    unsigned nontrivialcells = 0;
-    for (int cs : jcs) {
-        if (cs > 1) nontrivialcells++;
-    }
-    // This is needed to avoid un-normal zeros spoiling
-    // matrix::solve() calls.
-    l0 = normal(l0);
-    unsigned k0 = 0;
-    for (;;) {
-        // Strike out rows and columns with s[i]==true from l0.
-        matrix lx = l0;
-        matrix tmp(n, 1);
-        exmap tmpz;
-        for (unsigned i = 0; i < n; i++) {
-            symbol t;
-            tmp.let_op(i) = t;
-            // This map is needed to remove symbols corresposing to
-            // striked out rows from the output of matrix::solve()
-            // call below.
-            tmpz[t] = 0;
-            if (s[i]) {
-                for (unsigned j = 0; j < n; j++) {
-                    lx(i, j) = 0;
-                    lx(j, i) = 0;
-                }
-            }
-        }
-        // Find the first column of lx linearly dependent on the
-        // previous ones, not counting the striked out columns.
-        unsigned i = 0;
-        matrix sol;
-        for (;; i++) {
-            assert(i < n);
-            if (s[i]) continue;
-            matrix lxb4i = matrix_cut(lx, 0, n, 0, i);
-            matrix tmpi = matrix_cut(tmp, 0, i, 0, 1);
-            matrix lxi = matrix_cut(lx, 0, n, i, 1);
-            try {
-                sol = lxb4i.solve(tmpi, lxi);
-                //assert(normal(lxb4i.mul(sol).sub(lxi)).is_zero_matrix());
-                break;
-            } catch (const std::runtime_error &e) {
-                if (e.what() == std::string("matrix::solve(): inconsistent linear system")) {
-                    continue;
-                }
-                throw;
-            }
-        }
-        matrix d0(n, n);
-        matrix invd0(n, n);
-        for (unsigned j = 0; j < i; j++) {
-            assert(j < sol.nops());
-            d0(j, i) = -sol.op(j).subs(tmpz);
-            invd0(j, i) = jcs[j] == jcs[i] ? -sol.op(j).subs(tmpz) : 0;
-        }
-        l0 = normal(ident.sub(invd0).mul(l0).mul(ident.add(d0)));
-        d = d.add(d0).add(d.mul(d0));
-        if (i < nontrivialcells) {
-            k0 = i;
-            break;
-        }
-        s[i] = true;
-    }
-    // Check alg1() promise.
-    for (unsigned j = 0; j < n; j++) {
-        for (unsigned k = 0; k < n; k++) {
-            if ((!s[j]) && (s[k] || (k == k0))) {
-                assert(l0(j, k).is_zero());
-            }
-        }
-    }
-    s[k0] = true;
-    return make_pair(s, d);
-}
-
-pair<matrix, matrix>
-alg1x(const matrix &a0, const matrix &a1)
-{
-    LOGME;
-    unsigned n = a0.rows();
-    const auto &ucs = jordan(a0);
-    // This normal() is here partially to make sure u.inverse()
-    // doesn't fail when dealing with un-normal zeros.
-    const matrix &u = normal(ucs.first);
-    const vector<int> &jcs = ucs.second;
-    matrix invu = u.inverse();
-    unsigned ncells = jcs.size();
-    vector<int> jce(ncells);
-    vector<int> jcb(ncells);
-    int nsimplecells = 0;
-    for (unsigned i = 0; i < ncells; i++) {
-        jce[i] = (i == 0) ? jcs[0] : jce[i - 1] + jcs[i];
-        jcb[i] = (i == 0) ? 0 : jcb[i - 1] + jcs[i - 1];
-        if (jcs[i] == 1) nsimplecells++;
-    }
-    matrix l0(ncells, ncells);
-    matrix l1(ncells, ncells);
-    for (unsigned k = 0; k < ncells; k++) {
-        matrix v0t = matrix_cut(invu, jce[k]-1, 1, 0, n);
-        for (unsigned l = 0; l < ncells; l++) {
-            matrix u0 = matrix_cut(u, 0, n, jcb[l], 1);
-            l0(k, l) = v0t.mul(a1).mul(u0).op(0);
-            l1(k, l) = v0t.mul(u0).op(0);
-        }
-    }
-    ex det = determinant_by_blocks(l0.sub(l1.mul_scalar(symbol("λ")))).normal();
-    if (!det.is_zero()) {
-        loge("det|l0 - λ*l1| = {}", det);
-        throw fuchsia_error("matrix is Moser-irreducible");
-    }
-    const auto &sd = alg1(l0, jcs);
-    const auto &s = sd.first;
-    const auto &d = sd.second;
-    matrix ie = identity_matrix(n);
-    for (unsigned i = 0; i < ncells; i++) {
-        for (unsigned j = 0; j < ncells; j++) {
-            if (d(i, j) == 0) {
-                int ni = jcb[i];
-                int nj = jcb[j];
-                for (int k = 0; k < min(jcs[i], jcs[j]); k++) {
-                    ie(ni+k, nj+k) += d(i,j);
-                }
-            }
-        }
-    }
-    matrix ut = u.mul(ie);
-    matrix invut = ie.inverse().mul(invu);
-    int ns = 0;
-    for (unsigned i = 0; i < ncells; i++) {
-        if (s[i]) ns++;
-    }
-    matrix ru(n, ns);
-    matrix rv(ns, n);
-    for (unsigned i = 0, ii = 0; i < ncells; i++) {
-        if (s[i]) {
-            for (unsigned j = 0; j < n; j++) {
-                ru(j, ii) = ut(j, jcb[i]);
-                rv(ii, j) = invut(jcb[i], j);
-            }
-            ii++;
-        }
-    }
-    return make_pair(ru, rv);
-}
-
 matrix
 c0_infinity(const pfmatrix &pfm)
 {
@@ -2201,7 +2048,46 @@ fuchsify(const pfmatrix &m)
             if (a0.is_zero_matrix()) continue;
             done = false;
             const auto a1 = (pi != infinity) ? pfm(pi, ki + 1) : (ki != 0) ? pfm(0, ki - 1) : c0inf;
-            const auto uv = alg1x(a0, a1);
+            symbol lambda("L");
+            // n = (a0 a1-l)
+            //     (0  a0  )
+            matrix n(2*a0.rows(), 2*a0.cols());
+            for (unsigned i = 0; i < a0.rows(); i++) {
+                for (unsigned j = 0; j < a0.cols(); j++) {
+                    n(i, j) = a0(i, j);
+                    n(i + a0.rows(), j + a0.cols()) = a0(i, j);
+                }
+            }
+            for (unsigned i = 0; i < a1.rows(); i++) {
+                for (unsigned j = 0; j < a1.cols(); j++) {
+                    n(i, j + a0.cols()) = (i == j) ? a1(i, j) - lambda : a1(i, j);
+                }
+            }
+            vspace ns = nullspace(n);
+            vspace ws(a0.cols());
+            // Find the span of coefficients of the second half of ns as a poly in lambda.
+            for (unsigned i = 0; i < ns.dim(); i++) {
+                int maxdeg = 0;
+                for (unsigned j = 0; j < a0.cols(); j++) {
+                    auto &&e = ns.basis_rows()(i, j + a0.cols());
+                    maxdeg = max(maxdeg, e.degree(lambda));
+                }
+                matrix s(maxdeg + 1, a0.cols());
+                for (unsigned j = 0; j < a0.cols(); j++) {
+                    // It would be great to only expand by lambda here.
+                    ex e = expand(ns.basis_rows()(i, j + a0.cols()));
+                    for (int deg = 0; deg <= maxdeg; deg++) {
+                        s(deg, j) = factor(normal(e.coeff(lambda, deg)));
+                    }
+                }
+                ws.add_rows(s);
+            }
+            assert(!ws.basis_rows().has(lambda));
+            ws.normalize();
+            matrix wscols = ws.basis_cols();
+            if (ws.dim() == 0) {
+                throw fuchsia_error("matrix is Moser-irreducible");
+            }
             for (auto &kvj : poincare_map) {
                 const auto &pj = kvj.first;
                 const auto &kj = kvj.second;
@@ -2214,23 +2100,40 @@ fuchsify(const pfmatrix &m)
                 const auto b0 = (pj != infinity) ? pfm(pj, kj) : (kj != -1) ? pfm(0, kj) : c0inf;
                 if (b0.is_zero_matrix()) continue;
                 logi("Looking at reductions between {} and {}", pi, pj);
-                for (auto dualb : dual_basis_spanning_left_invariant_subspace(b0, uv.first)) {
-                    auto p = uv.first.mul(dualb);
-                    reductions.push_back(Reduction {
-                        pi,
-                        pj,
-                        p,
-                        pfm.with_balance_t(p, pi, pj)
-                    });
+                bool nosinglevector = true;
+                if (ws.dim() > 1) {
+                    for (unsigned b = 0; b < ws.dim(); b++) {
+                        logd("Looking at basis vector {}", b);
+                        for (auto &&dualb : dual_basis_spanning_left_invariant_subspace(b0, ws.basis_col(b))) {
+                            auto p = normal(ws.basis_col(b).mul(dualb));
+                            auto pfm2 = pfm.with_balance_t(p, pi, pj);
+                            logd("Complexity: {}", complexity(pfm2));
+                            reductions.push_back(Reduction { pi, pj, p, pfm2 });
+                            nosinglevector = false;
+                        }
+                    }
+                }
+                if (nosinglevector) {
+                    for (auto &&dualb : dual_basis_spanning_left_invariant_subspace(b0, wscols)) {
+                        auto p = normal(wscols.mul(dualb));
+                        auto pfm2 = pfm.with_balance_t(p, pi, pj);
+                        logd("Complexity: {}", complexity(pfm2));
+                        reductions.push_back(Reduction { pi, pj, p, pfm2 });
+                    }
                 }
             }
             ex randomp = randint(-10, 10);
-            poor_reductions.push_back(Reduction {
-                pi,
-                randomp,
-                uv.first.mul(uv.second),
-                pfm.with_balance_t(uv.first.mul(uv.second), pi, randomp)
-            });
+            matrix z(a0.rows(), a0.cols());
+            for (auto &&dualb : dual_basis_spanning_left_invariant_subspace(z, wscols)) {
+                auto p = wscols.mul(dualb);
+                poor_reductions.push_back(Reduction {
+                    pi,
+                    randomp,
+                    p,
+                    pfm.with_balance_t(p, pi, randomp)
+                });
+                break;
+            }
         }
         if (done) { break; }
         if (reductions.size() > 0) {
@@ -2239,6 +2142,7 @@ fuchsify(const pfmatrix &m)
             int minc = complexity(reductions[0].pfm);
             logi("Reduction between {} and {} can give complexity {}",
                     reductions[0].pi, reductions[0].pj, minc);
+            logd("Projector:\n{}", reductions[0].p);
             for (size_t i = 1; i < reductions.size(); i++) {
                 int c = complexity(reductions[i].pfm);
                 if (c < minc) {
@@ -2247,6 +2151,7 @@ fuchsify(const pfmatrix &m)
                 }
                 logi("Reduction between {} and {} can give complexity {}",
                         reductions[i].pi, reductions[i].pj, c);
+                logd("Projector:\n{}", reductions[i].p);
             }
             Reduction &r = reductions[mini];
             logi("Use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
