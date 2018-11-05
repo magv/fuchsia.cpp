@@ -61,6 +61,7 @@ Ss{OPTIONS}
     Fl{-t} Ar{path}    Save the resulting transformation into this file.
     Fl{-i} Ar{path}    Save the inverse transformation into this file.
     Fl{-C}         Force colored output even stdout is not a tty.
+    Fl{-P}         Paranoid mode: spend more time checking internal invariants.
     Fl{-v}         Print a more verbose log.
     Fl{-h}         Show this help message.
     Fl{-V}         Print version information.
@@ -133,7 +134,7 @@ main(int argc, char *argv[])
     const char *matrix_m_path = NULL;
     const char *matrix_t_path = NULL;
     const char *matrix_i_path = NULL;
-    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:i:s:CV")) != -1;) {
+    for (int opt; (opt = getopt(argc, argv, "hvx:e:y:m:t:i:s:CPV")) != -1;) {
         switch (opt) {
         case 'h': usage(); return 0;
         case 'V': cout << VERSION; return 0;
@@ -144,6 +145,7 @@ main(int argc, char *argv[])
         case 'm': matrix_m_path = optarg; break;
         case 't': matrix_t_path = optarg; break;
         case 'i': matrix_i_path = optarg; break;
+        case 'P': PARANOID = true; break;
         case 'C': COLORS = true; break;
         default: return 1;
         }

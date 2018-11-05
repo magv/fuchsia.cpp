@@ -12,6 +12,7 @@ using namespace GiNaC;
 using namespace std;
 
 static bool COLORS = !!isatty(STDOUT_FILENO);
+static bool PARANOID = false;
 static bool VERBOSE = true;
 
 /* LOGGING
@@ -955,6 +956,12 @@ pfmatrix::with_off_diagonal_t(const matrix &D, const ex &p, int k) const
     // * everything to the left of the D block
     // * everything to the bottom of the D block
     m.normalize();
+    if (PARANOID) {
+        auto t = identity_matrix(nrows).add(D.mul_scalar(pow(x - p, k)));
+        auto tinv = identity_matrix(nrows).sub(D.mul_scalar(pow(x - p, k)));
+        auto mm = tinv.mul(to_matrix().mul(t).sub(ex_to_matrix(t.diff(x))));
+        assert(normal(m.to_matrix().sub(mm)).is_zero_matrix());
+    }
     return m;
 }
 
@@ -1777,6 +1784,9 @@ eigenvectors_right(const matrix &m, const ex &eval)
     vector<matrix> evectors(es.dim());
     for (unsigned i = 0; i < es.dim(); i++) {
         evectors[i] = es.basis_col(i);
+        if (PARANOID) {
+            assert(normal(m.mul(evectors[i]).sub(evectors[i].mul_scalar(eval))).is_zero_matrix());
+        }
     }
     return evectors;
 }
@@ -1790,6 +1800,9 @@ eigenvectors_left(const matrix &m, const ex &eval)
     vector<matrix> evectors(es.dim());
     for (unsigned i = 0; i < es.dim(); i++) {
         evectors[i] = es.basis_row(i);
+        if (PARANOID) {
+            assert(normal(evectors[i].mul(m).sub(evectors[i].mul_scalar(eval))).is_zero_matrix());
+        }
     }
     return evectors;
 }
@@ -1873,7 +1886,9 @@ jordan(const matrix &m)
             assert(kk == kt);
         }
     }
-    //assert(q.rank() == n);
+    if (PARANOID) {
+        assert(q.rank() == n);
+    }
     return make_pair(q, jcs);
 }
 
@@ -1909,7 +1924,12 @@ dual_basis_spanning_left_invariant_subspace(const matrix &m, const matrix &u)
         // Solve x*lev*u=1, and take x*lev as the result.
         matrix x = matrix_solve_left(normal(lev.mul(u)), tmp, identity);
         matrix_map_inplace(x, [&](auto &&e) { return e.subs(tmpz); });
-        results.push_back(x.mul(lev));
+        matrix r = x.mul(lev);
+        if (PARANOID) {
+            matrix z = normal(r.mul(u)).sub(identity_matrix(u.cols()));
+            assert(z.is_zero_matrix());
+        }
+        results.push_back(r);
     } catch (const std::runtime_error &e) {
         if (e.what() != std::string("matrix::solve(): inconsistent linear system")) {
             throw;
@@ -2087,6 +2107,11 @@ fuchsify(const pfmatrix &m)
             matrix wscols = ws.basis_cols();
             if (ws.dim() == 0) {
                 throw fuchsia_error("matrix is Moser-irreducible");
+            }
+            if (PARANOID) {
+                // ws is a subset of nullspace(a0)
+                matrix z = normal(a0.mul(wscols));
+                assert(z.is_zero_matrix());
             }
             for (auto &kvj : poincare_map) {
                 const auto &pj = kvj.first;

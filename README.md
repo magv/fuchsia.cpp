@@ -118,6 +118,10 @@ in the releases section on Github.
 
   Force colored output even stdout is not a tty.
 
+* -P
+
+  Paranoid mode: spend more time checking internal invariants.
+
 * -v
 
   Print a more verbose log.
