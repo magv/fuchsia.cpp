@@ -3,8 +3,8 @@ gitver() {
 }
 
 gitid() {
-    cidlong=$(git -C "$1" describe --always --abbrev=0 --exclude '*')
-    cidshort=$(git -C "$1" describe --always --exclude '*' --dirty=+)
+    cidlong=$(git -C "$1" describe --always --abbrev=0 --match '')
+    cidshort=$(git -C "$1" describe --always --match '' --dirty=+)
     date=$(git -C "$1" log -1 $cidlong --date=format:'%Y-%m-%d' --format=format:'%cd')
     echo "commit $cidshort from $date"
 }
