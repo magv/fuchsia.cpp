@@ -2542,13 +2542,32 @@ fuchsify_off_diagonal_blocks(const pfmatrix &m)
 loop:;
             logd("Looking at {}x{} block at {}:{}", size1, size2, offs1, offs2);
             assert(offs1 > offs2);
-            for (auto &&kv : pfm.residues) {
-                // We'll need pi and ki after pfm variable is
-                // overwritten, so these can't be references.
-                const auto pi = kv.first.first;
-                const auto ki = kv.first.second;
-                const auto &ci = kv.second;
-                if (ki == -1) continue;
+            // Sort the residues.
+            std::vector<pfmatrix::key> keys;
+            keys.reserve(pfm.residues.size());
+            for(auto &&kv: pfm.residues) {
+                if (kv.first.second != -1) keys.push_back(kv.first);
+            }
+            sort(keys.begin(), keys.end(), [](auto &&k1, auto &&k2) {
+                // Reduction of the residues with higher absolute
+                // Poincare rank spoils the residues with lower
+                // ones, so we should start with the largest.
+                int p1 = k1.second + 1;
+                int p2 = k2.second + 1;
+                if (abs(p1) > abs(p2)) return true;
+                if (abs(p1) < abs(p2)) return false;
+                // The order beyond this point doesn't matter.
+                if (p1 < p2) return true;
+                if (p1 > p2) return false;
+                return ex_is_less()(k1.first, k2.first);
+            });
+            for (auto &&kk : keys) {
+                // It's useful that pi and ki do not point to
+                // pfm, because we'll overwrite that, but we'll
+                // still need pi and ki afterwards.
+                const auto &pi = kk.first;
+                const auto &ki = kk.second;
+                const auto &ci = pfm(pi, ki);
                 if (ci.is_zero_matrix()) continue;
                 auto b = matrix_cut(ci, offs1, size1, offs2, size2);
                 if (b.is_zero_matrix()) continue;
