@@ -93,7 +93,7 @@ print_matrix_shape(ostream &f, const matrix &m, const char *ident)
     for (unsigned i = 0; i < m.rows(); i++) {
         f << ident;
         for (unsigned j = 0; j < m.cols(); j++) {
-            if (COLORS && (i == j)) f << "\033[34m";
+            if (COLORS && (i == j)) f << "\033[1;34m";
             f << (m(i, j).is_zero() ? '.' : '#');
             if (COLORS && (i == j)) f << "\033[0m";
         }
