@@ -1,4 +1,4 @@
-#include <catch/catch.hpp>
+#include "build/catch.hpp"
 #include "fuchsia.cpp"
 
 TEST_CASE("eigenvectors") {

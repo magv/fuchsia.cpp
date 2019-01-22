@@ -25,10 +25,13 @@ build/fuchsia.static: build/.dir main.cpp fuchsia.cpp Makefile
 test: build/test
 	@build/test -a
 
-build/test: build/testrunner.o tests.cpp fuchsia.cpp
+build/catch.hpp:
+	wget -O$@ 'https://raw.githubusercontent.com/catchorg/Catch2/v2.5.0/single_include/catch2/catch.hpp'
+
+build/test: build/testrunner.o tests.cpp fuchsia.cpp build/catch.hpp
 	${CXX} ${XCFLAGS} -o $@ build/testrunner.o tests.cpp ${XLDFLAGS}
 
-build/testrunner.o: build/.dir testrunner.cpp
+build/testrunner.o: build/.dir testrunner.cpp build/catch.hpp
 	${CXX} ${XCFLAGS} -c -o $@ testrunner.cpp
 
 build/.dir:
