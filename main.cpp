@@ -125,6 +125,14 @@ usage()
     cout << p;
 }
 
+#define IFCMD(name, condition) \
+    if ((argc >= 1) && !strcmp(argv[0], name)) \
+        if (!(condition)) { \
+            cerr << "fuchsia: malformed '" << argv[0] \
+                 << "' invocation (use -h to see usage)" << endl; \
+            return 1; \
+        } else
+
 int
 main(int argc, char *argv[])
 {
@@ -159,11 +167,11 @@ main(int argc, char *argv[])
     symbol y(var_y_name);
     symbol eps(var_eps_name);
     symtab vars = {{var_x_name, x}, {var_y_name, y}, {var_eps_name, eps}};
-    if ((argc == 1) && !strcmp(argv[0], "help")) {
+    IFCMD("help", argc == 1) {
         usage();
         return 0;
     }
-    else if ((argc == 2) && !strcmp(argv[0], "show")) {
+    else IFCMD("show", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         cout << "Matrix size: " << ms.first.rows() << "x" << ms.first.cols() << endl;
         pfmatrix pfm(ms.first, x);
@@ -195,7 +203,7 @@ main(int argc, char *argv[])
             print_matrix_shape(cout, c, "      ");
         }
     }
-    else if ((argc == 2) && !strcmp(argv[0], "sort")) {
+    else IFCMD("sort", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         block_triangular_permutation btp(ms.first);
         logi("Block sizes: {}", btp.block_size());
@@ -203,7 +211,7 @@ main(int argc, char *argv[])
         matrix_t = btp.t();
         matrix_i = btp.t().transpose();
     }
-    else if ((argc == 2) && !strcmp(argv[0], "fuchsify")) {
+    else IFCMD("fuchsify", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = fuchsify(pfm);
@@ -211,7 +219,7 @@ main(int argc, char *argv[])
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
-    else if ((argc == 2) && !strcmp(argv[0], "normalize")) {
+    else IFCMD("normalize", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = normalize(pfm, eps);
@@ -219,7 +227,7 @@ main(int argc, char *argv[])
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
-    else if ((argc == 2) && !strcmp(argv[0], "factorize")) {
+    else IFCMD("factorize", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = factorize(pfm, eps);
@@ -227,7 +235,7 @@ main(int argc, char *argv[])
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
-    else if ((argc == 2) && !strcmp(argv[0], "reduce")) {
+    else IFCMD("reduce", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = reduce(pfm, eps);
@@ -235,7 +243,7 @@ main(int argc, char *argv[])
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
-    else if ((argc == 2) && !strcmp(argv[0], "reduce-diagonal-blocks")) {
+    else IFCMD("reduce-diagonal-blocks", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = reduce_diagonal_blocks(pfm, eps);
@@ -243,7 +251,7 @@ main(int argc, char *argv[])
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
-    else if ((argc == 2) && !strcmp(argv[0], "fuchsify-off-diagonal-blocks")) {
+    else IFCMD("fuchsify-off-diagonal-blocks", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         auto r = fuchsify_off_diagonal_blocks(pfm);
@@ -251,7 +259,7 @@ main(int argc, char *argv[])
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
-    else if ((argc >= 3) && !strcmp(argv[0], "transform")) {
+    else IFCMD("transform", argc >= 3) {
         matrix m;
         tie(m, vars) = load_matrix(argv[1], vars);
         for (int i = 2; i < argc; i++) {
@@ -262,14 +270,14 @@ main(int argc, char *argv[])
         pfmatrix pfm(m, x);
         matrix_m = pfm.to_matrix();
     }
-    else if ((argc == 3) && !strcmp(argv[0], "changevar")) {
+    else IFCMD("changevar", argc == 3) {
         auto ms = load_matrix(argv[1], vars);
         parser reader(ms.second);
         auto xsubs = reader(argv[2]);
         matrix m2 = ex_to_matrix(ms.first.subs(exmap{{x, xsubs}})).mul_scalar(xsubs.diff(y));
         matrix_m = pfmatrix(m2, y).to_matrix();
     }
-    else if ((argc == 2) && !strcmp(argv[0], "suggest-changevar")) {
+    else IFCMD("suggest-changevar", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
         exset halfpoints;
