@@ -2686,72 +2686,76 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
     transformation tr(m.nrows);
     auto bs = btp.block_size();
     logd("Initial number of zeros: {}", nzeros(pfm));
-    for (int r = 0, ir = 0; ir < (int)bs.size(); ir++) {
-        int sizer = bs[ir];
-        for (int c = r, ic = ir - 1; ic >= 0; ic--) {
-            int sizec = bs[ic];
-            c -= sizec;
-            if (sizer != 1) continue;
-            if (sizec != 1) continue;
-            logd("Looking at a {}x{} block at {}:{}", sizer, sizec, r, c);
-            // Off-diagonal transformation 1+K*1(r,c), with r>c, has this effect:
-            // 1) m[>=r, c] += K*m[>=r, r]
-            // 2) m[r, <=c] -= K*m[c, <=c]
-            //
-            // Depending on K some terms become zero, others
-            // become (or remain) non-zero. Our strategy is to
-            // find K that results in the most zeros.
-            map<ex, int, ex_is_less> kzerocnt;
-            for (const auto &kv : pfm.residues) {
-                const auto &ci = kv.second;
-                // ci'(r, c) = ci(r, c) + K*(ci(r, r) - ci(c, c))
-                ex dc = normal(ci(r, r) - ci(c, c));
-                if (dc.is_zero()) continue;
-                ex k = ratcan(-ci(r, c)/dc);
-                if (k.info(info_flags::rational)) kzerocnt[k] += 1;
-            }
-            for (const auto &kv : pfm.residues) {
-                const auto &ci = kv.second;
-                for (int rr = r + 1; rr < (int)pfm.nrows; rr++) {
-                    // ci'(rr, c) = ci(rr, c) + K*ci(rr, r);
-                    if (ci(rr, r).is_zero()) continue;
-                    ex k = ratcan(-ci(rr, c)/ci(rr, r));
+    for (;;) {
+        bool done = true;
+        for (int r = 0, ir = 0; ir < (int)bs.size(); ir++) {
+            int sizer = bs[ir];
+            for (int c = r, ic = ir - 1; ic >= 0; ic--) {
+                int sizec = bs[ic];
+                c -= sizec;
+                if (sizer != 1) continue;
+                if (sizec != 1) continue;
+                logd("Looking at a {}x{} block at {}:{}", sizer, sizec, r, c);
+                // Off-diagonal transformation 1+K*1(r,c), with r>c, has this effect:
+                // 1) m[>=r, c] += K*m[>=r, r]
+                // 2) m[r, <=c] -= K*m[c, <=c]
+                //
+                // Depending on K some terms become zero, others
+                // become (or remain) non-zero. Our strategy is to
+                // find K that results in the most zeros.
+                map<ex, int, ex_is_less> kzerocnt;
+                for (const auto &kv : pfm.residues) {
+                    const auto &ci = kv.second;
+                    // ci'(r, c) = ci(r, c) + K*(ci(r, r) - ci(c, c))
+                    ex dc = normal(ci(r, r) - ci(c, c));
+                    if (dc.is_zero()) continue;
+                    ex k = ratcan(-ci(r, c)/dc);
                     if (k.info(info_flags::rational)) kzerocnt[k] += 1;
                 }
-                for (int cc = 0; cc < c; cc++) {
-                    // ci'(r, cc) = ci(r, cc) - K*ci(c, cc);
-                    if (ci(c, cc).is_zero()) continue;
-                    ex k = ratcan(-ci(r, cc)/ci(c, cc));
-                    if (k.info(info_flags::rational)) kzerocnt[k] += 1;
+                for (const auto &kv : pfm.residues) {
+                    const auto &ci = kv.second;
+                    for (int rr = r + 1; rr < (int)pfm.nrows; rr++) {
+                        // ci'(rr, c) = ci(rr, c) + K*ci(rr, r);
+                        if (ci(rr, r).is_zero()) continue;
+                        ex k = ratcan(-ci(rr, c)/ci(rr, r));
+                        if (k.info(info_flags::rational)) kzerocnt[k] += 1;
+                    }
+                    for (int cc = 0; cc < c; cc++) {
+                        // ci'(r, cc) = ci(r, cc) - K*ci(c, cc);
+                        if (ci(c, cc).is_zero()) continue;
+                        ex k = ratcan(-ci(r, cc)/ci(c, cc));
+                        if (k.info(info_flags::rational)) kzerocnt[k] += 1;
+                    }
+                }
+                for (auto &&kv : kzerocnt) {
+                    logd("* k={} makes {} zeros", kv.first, kv.second);
+                }
+                if (kzerocnt.size() == 0) continue;
+                ex k = max_element(begin(kzerocnt), end(kzerocnt), [] (auto &&kv1, auto &&kv2) {
+                    if (kv1.second < kv2.second) return true;
+                    if (kv1.second > kv2.second) return false;
+                    int c1 = complexity(kv1.first);
+                    int c2 = complexity(kv2.first);
+                    if (c1 > c2) return true;
+                    if (c1 < c2) return false;
+                    return ex_is_less()(kv1.first, kv2.first);
+                })->first;
+                if (!k.is_zero()) {
+                    logd("* best k here is: {} (should give {} new zeros)", k, kzerocnt[k] - kzerocnt[0]);
+                    matrix t = identity_matrix(pfm.nrows);
+                    matrix invt = identity_matrix(pfm.nrows);
+                    t(r, c) = k;
+                    invt(r, c) = -k;
+                    logi("Use constant transformation:\n{}", t);
+                    pfm = pfm.with_constant_t(invt, t);
+                    tr.add_constant_t(invt, t);
+                    done = false;
                 }
             }
-            for (auto &&kv : kzerocnt) {
-                logd("* k={} makes {} zeros", kv.first, kv.second);
-            }
-            if (kzerocnt.size() == 0) continue;
-            ex k = max_element(begin(kzerocnt), end(kzerocnt), [] (auto &&kv1, auto &&kv2) {
-                if (kv1.second < kv2.second) return true;
-                if (kv1.second > kv2.second) return false;
-                int c1 = complexity(kv1.first);
-                int c2 = complexity(kv2.first);
-                if (c1 > c2) return true;
-                if (c1 < c2) return false;
-                return ex_is_less()(kv1.first, kv2.first);
-            })->first;
-            if (!k.is_zero()) {
-                logd("* best k here is: {} (should give {} new zeros)", k, kzerocnt[k] - kzerocnt[0]);
-                matrix t = identity_matrix(pfm.nrows);
-                matrix invt = identity_matrix(pfm.nrows);
-                t(r, c) = k;
-                invt(r, c) = -k;
-                int oz = nzeros(pfm);
-                pfm = pfm.with_constant_t(invt, t);
-                int nz = nzeros(pfm);
-                logd("  - actually gave: {} zeros ({} vs {})", nz-oz, nz, oz);
-                tr.add_constant_t(invt, t);
-            }
+            r += sizer;
         }
-        r += sizer;
+        if (done) break;
+        logd("We'll now make an additional pass");
     }
     logd("Final number of zeros: {}", nzeros(pfm));
     return make_pair(pfm, tr);
