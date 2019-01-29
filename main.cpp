@@ -50,8 +50,12 @@ Ss{COMMANDS}
 
     Cm{suggest-changevar} [Fl{-x} Ar{name}] [Fl{-y} Ar{name}] Ar{matrix}
         Suggest a rational change of variable that will transform residue
-        eigenvalues of the form n/2+k*eps into n+k*eps, thus making it possible
-        to find an epsilon form of the matrix.
+        eigenvalues of the form n/2+k*eps into n+k*eps, thus making it
+        possible to find an epsilon form of the matrix.
+
+    Cm{simplify} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
+        Try to find a transformation that makes a given matrix
+        simpler, for some definition of "simple".
 
 Ss{OPTIONS}
     Fl{-x} Ar{name}    Use this name for the free variable (default: x).
@@ -361,6 +365,14 @@ main(int argc, char *argv[])
                     "no rational variable change can cure that",
                     halfpoints.size() + infinity_too);
         }
+    }
+    else IFCMD("simplify", argc == 2) {
+        auto ms = load_matrix(argv[1], vars);
+        pfmatrix pfm(ms.first, x);
+        auto r = simplify_off_diagonal_blocks(pfm);
+        matrix_m = r.first.to_matrix();
+        matrix_t = r.second.to_matrix();
+        matrix_i = r.second.to_inverse_matrix();
     }
     else if (argc == 0) {
         cerr << "fuchsia: no command provided (use -h to see usage)" << endl;
