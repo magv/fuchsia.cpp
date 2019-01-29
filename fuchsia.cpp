@@ -2740,7 +2740,7 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                     if (c1 < c2) return false;
                     return ex_is_less()(kv1.first, kv2.first);
                 })->first;
-                if (!k.is_zero()) {
+                if (kzerocnt[k] > kzerocnt[0]) {
                     logd("* best k here is: {} (should give {} new zeros)", k, kzerocnt[k] - kzerocnt[0]);
                     matrix t = identity_matrix(pfm.nrows);
                     matrix invt = identity_matrix(pfm.nrows);
