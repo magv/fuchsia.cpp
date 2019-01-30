@@ -2723,7 +2723,7 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                     for (int cc = 0; cc < c; cc++) {
                         // ci'(r, cc) = ci(r, cc) - K*ci(c, cc);
                         if (ci(c, cc).is_zero()) continue;
-                        ex k = ratcan(-ci(r, cc)/ci(c, cc));
+                        ex k = ratcan(ci(r, cc)/ci(c, cc));
                         if (k.info(info_flags::rational)) kzerocnt[k] += 1;
                     }
                 }
