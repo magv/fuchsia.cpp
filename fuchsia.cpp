@@ -2657,16 +2657,16 @@ reduce(const pfmatrix &m, const symbol &eps)
  */
 
 int
-nzeros(const pfmatrix &pfm)
+nonzero_count(const pfmatrix &pfm)
 {
-    int nzeros = 0;
+    int nnz = 0;
     for (const auto &kv : pfm.residues) {
         const auto &ci = kv.second;
         for (unsigned i = 0; i < ci.nops(); i++) {
-            nzeros += !!ci.op(i).is_zero();
+            nnz += !ci.op(i).is_zero();
         }
     }
-    return nzeros;
+    return nnz;
 }
 
 /* This simplification routine tries to increase the number of
@@ -2683,13 +2683,19 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
     LOGME;
     block_triangular_permutation btp(m);
     pfmatrix pfm = m.with_constant_t(btp.t().transpose(), btp.t());
+    logi("Shuffle into block-diagonal form with:\n{}", btp.t());
     transformation tr(m.nrows);
     auto bs = btp.block_size();
-    logd("Initial number of zeros: {}", nzeros(pfm));
+    int nterms1 = nonzero_count(pfm);
+    logd("Initial number of non-zero terms: {}", nterms1);
     for (;;) {
         bool done = true;
-        for (int r = 0, ir = 0; ir < (int)bs.size(); ir++) {
+        // Traversing rows from the bottom to the top. This way
+        // the bottom row collects the least amount of garbage
+        // coefficients.
+        for (int r = pfm.nrows, ir = bs.size() - 1; ir >= 0; ir--) {
             int sizer = bs[ir];
+            r -= sizer;
             for (int c = r, ic = ir - 1; ic >= 0; ic--) {
                 int sizec = bs[ic];
                 c -= sizec;
@@ -2728,7 +2734,7 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                     }
                 }
                 for (auto &&kv : kzerocnt) {
-                    logd("* k={} makes {} zeros", kv.first, kv.second);
+                    logd("* k={} removes {} terms", kv.first, kv.second);
                 }
                 if (kzerocnt.size() == 0) continue;
                 ex k = max_element(begin(kzerocnt), end(kzerocnt), [] (auto &&kv1, auto &&kv2) {
@@ -2741,7 +2747,7 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                     return ex_is_less()(kv1.first, kv2.first);
                 })->first;
                 if (kzerocnt[k] > kzerocnt[0]) {
-                    logd("* best k here is: {} (should give {} new zeros)", k, kzerocnt[k] - kzerocnt[0]);
+                    logd("* best k here is: {} (should eliminate {} terms)", k, kzerocnt[k] - kzerocnt[0]);
                     matrix t = identity_matrix(pfm.nrows);
                     matrix invt = identity_matrix(pfm.nrows);
                     t(r, c) = k;
@@ -2752,12 +2758,12 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                     done = false;
                 }
             }
-            r += sizer;
         }
         if (done) break;
         logd("We'll now make an additional pass");
     }
-    logd("Final number of zeros: {}", nzeros(pfm));
+    int nterms2 = nonzero_count(pfm);
+    logd("Total terms eliminated: {} ({} vs {})", nterms1 - nterms2, nterms2, nterms1);
     return make_pair(pfm, tr);
 }
 
