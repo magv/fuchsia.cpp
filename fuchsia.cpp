@@ -2538,7 +2538,9 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
     block_triangular_permutation btp(m);
     pfmatrix pfm = m.with_constant_t(btp.t().transpose(), btp.t());
     logi("Shuffle into block-diagonal form with:\n{}", btp.t());
+    logd("Block sizes: {}", btp.block_size());
     transformation tr(m.nrows);
+    tr.add_constant_t(btp.t().transpose(), btp.t());
     auto bs = btp.block_size();
     int nterms1 = nonzero_count(pfm);
     logd("Initial number of non-zero terms: {}", nterms1);
@@ -2604,8 +2606,11 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                         t(r, c) = k;
                         invt(r, c) = -k;
                         logi("Use constant transformation:\n{}", t);
+                        int n1 = nonzero_count(pfm);
                         pfm = pfm.with_constant_t(invt, t);
                         tr.add_constant_t(invt, t);
+                        int n2 = nonzero_count(pfm);
+                        logd("Term reduction: {} ({} vs {})", n1 - n2, n2, n1);
                         done = false;
                     }
                 }
