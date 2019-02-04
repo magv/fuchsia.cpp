@@ -169,8 +169,10 @@ class fuchsia_error : public exception {
  * ============================================================
  */
 
-int randint(int a, int b) {
-    return rand() % (b - a + 1) - a;
+int
+randint(int a, int b)
+{
+    return rand() % (b - a + 1) + a;
 }
 
 matrix
