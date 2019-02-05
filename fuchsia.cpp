@@ -2243,19 +2243,62 @@ is_normal(const pfmatrix &pfm, const symbol &eps)
  * ============================================================
  */
 
+bool
+is_factorized(const matrix &m, const symbol &eps)
+{
+    exmap map = {{eps, 2*eps}};
+    for (unsigned i = 0; i < m.nops(); i++) {
+        const ex &e = m.op(i);
+        if (!normal(expand(e.subs(map) - e*2)).is_zero()) return false;
+    }
+    return true;
+}
+
+bool
+is_factorized(const pfmatrix &pfm, const symbol &eps)
+{
+    for (const auto &kv : pfm.residues) {
+        const auto &ci = kv.second;
+        if (ci.is_zero_matrix()) continue;
+        if (!is_factorized(ci, eps)) return false;
+    }
+    return true;
+}
+
 pair<pfmatrix, transformation>
-factorize(const pfmatrix &m, const symbol &eps)
+factorize(const pfmatrix &m, const symbol &eps, bool block_only=false)
 {
     LOGME;
-    lst tmp;
-    for (unsigned i = 0; i < m.nrows*m.nrows; i++) {
-        tmp.append(symbol());
+    pfmatrix pfm = m;
+    transformation tr(pfm.nrows);
+    if (is_factorized(pfm, eps)) {
+        logd("Already factorized");
+        return make_pair(pfm, tr);
     }
-    matrix t = matrix(m.nrows, m.nrows, tmp);
+    matrix t(pfm.nrows, pfm.nrows);
+    lst tmp;
+    if (block_only) {
+        block_triangular_permutation btp(pfm);
+        tr.add_constant_t(btp.t().transpose(), btp.t());
+        pfm = pfm.with_constant_t(btp.t().transpose(), btp.t());
+        unsigned offs = 0;
+        for (int size : btp.block_size()) {
+            for (unsigned i = offs; i < offs + size; i++) {
+                for (unsigned j = 0; j < offs + size; j++) {
+                    tmp.append(t(i, j) = symbol());
+                }
+            }
+            offs += size;
+        }
+    } else {
+        for (unsigned i = 0; i < t.nops(); i++) {
+            tmp.append(t.let_op(i) = symbol());
+        }
+    }
     symbol mu("MU");
     lst eqs;
     int nresidues = 0;
-    for (const auto &kv : m.residues) {
+    for (const auto &kv : pfm.residues) {
         const auto &ki = kv.first.second;
         const auto &ci = kv.second;
         if (ci.is_zero_matrix()) continue;
@@ -2274,64 +2317,63 @@ factorize(const pfmatrix &m, const symbol &eps)
     }
     if (nresidues == 1) {
         logd("Only one residue, let's try using Jordan form");
-        for (const auto &kv : m.residues) {
+        for (const auto &kv : pfm.residues) {
             const auto &ci = kv.second;
             if (ci.is_zero_matrix()) continue;
             matrix j = jordan(ci.mul_scalar(1/eps)).first;
             matrix ij = j.inverse();
             logi("Use constant transformation:\n{}", j);
-            transformation t_(m.nrows);
-            t_.add_constant_t(ij, j);
-            return make_pair(m.with_constant_t(ij, j), t_);
+            tr.add_constant_t(ij, j);
+            return make_pair(pfm.with_constant_t(ij, j), tr);
         }
     }
-    logd("solving {} linear equations in {} variables", eqs.nops(), tmp.nops());
+    logd("Solving {} linear equations in {} variables", eqs.nops(), tmp.nops());
     ex sol = lsolve(eqs, tmp);
-    logd("found a solution");
+    logd("Found a solution");
     matrix_map_inplace(t, [&](auto &&e) { return e.subs(sol); });
     tmp.append(mu);
-    for (int range = 0;; range += 1 + range/16) {
-        logd("substituting free variables, range={}", range);
+    vector<pair<matrix, matrix>> stlist;
+    for (int range = 0, attempt = 1; stlist.size() < 16;) {
+        if (--attempt < 0) {
+            attempt = 16;
+            range++;
+        }
+        logd("Substituting free variables, range={}", range);
         try {
             exmap map;
             for (unsigned i = 0; i < tmp.nops(); i++) {
-                map[tmp.op(i)] = randint(-range, range);
+                map[tmp.op(i)] = randint(0, range);
             }
             matrix st = matrix_map(t, [&](auto &&e) {
                 return normal(e.subs(map));
             });
             matrix invst = normal(st.inverse());
-            transformation t_(m.nrows);
-            t_.add_constant_t(invst, st);
-            logi("Use constant transformation:\n{}", st);
-            return make_pair(m.with_constant_t(invst, st), t_);
+            stlist.push_back(make_pair(st, invst));
+            logd("Found a transformation with complexity {}:\n{}", complexity(st), st);
         } catch (const pole_error & e) {
-            logd("got error: {}; retrying", e.what());
-            continue;
+            logd("Got this error: {}; retrying", e.what());
         } catch (const std::runtime_error & e) {
             if (e.what() == std::string("matrix::inverse(): singular matrix")) {
-                logd("got singular matrix; retrying");
-                continue;
+                logd("Got a singular matrix; retrying");
+            } else {
+                throw;
             }
-            throw;
         }
     }
-    assert(false);
-}
-
-bool
-is_factorized(const pfmatrix &pfm, const symbol &eps)
-{
-    for (const auto &kv : pfm.residues) {
-        const auto &ci = kv.second;
-        if (ci.is_zero_matrix()) continue;
-        exmap map = {{eps, 2*eps}};
-        for (unsigned i = 0; i < ci.nops(); i++) {
-            const ex &e = ci.op(i);
-            if (!normal(e.subs(map) - e*2).is_zero()) return false;
+    logd("Searching the best out of {}", stlist.size());
+    int besti = 0;
+    int bestc = complexity(stlist[besti].first);
+    for (int i = 1; i < stlist.size(); i++) {
+        int c = complexity(stlist[i].first);
+        if (c < bestc) {
+            besti = i;
+            bestc = c;
         }
     }
-    return true;
+    auto &&st = stlist[besti];
+    logi("Use constant transformation of complexity {}:\n{}", complexity(st.first), st.first);
+    tr.add_constant_t(st.second, st.first);
+    return make_pair(pfm.with_constant_t(st.second, st.first), tr);
 }
 
 /* Block reduction
@@ -2497,7 +2539,7 @@ reduce(const pfmatrix &m, const symbol &eps)
     LOGME;
     auto mt1 = reduce_diagonal_blocks(m, eps);
     auto mt2 = fuchsify_off_diagonal_blocks(mt1.first);
-    auto mt3 = factorize(mt2.first, eps);
+    auto mt3 = factorize(mt2.first, eps, true);
     transformation t(m.nrows);
     t.add(mt1.second);
     t.add(mt2.second);
