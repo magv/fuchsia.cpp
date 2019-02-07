@@ -15,6 +15,8 @@ static bool COLORS = !!isatty(STDOUT_FILENO);
 static bool PARANOID = false;
 static bool VERBOSE = true;
 
+typedef vector<numeric> numvector;
+
 /* LOGGING
  * ============================================================
  *
@@ -2668,6 +2670,170 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
     return make_pair(pfm, tr);
 }
 
+/* Find new coprimes by factoring a given number into an existing
+ * set of coprimes, and seeing if there's anything left.
+ */
+void
+digest_coprimes(numvector &primes, const numeric &num)
+{
+    numeric n = num.numer();
+    numeric d = num.denom();
+    numvector todo = { n.is_negative() ? -n : n, d.is_negative() ? -d : d };
+    while (todo.size() > 0) {
+        numeric e = todo.back(); todo.pop_back();
+        for (size_t i = 0; i < primes.size(); i++) {
+            const numeric &p = primes[i];
+            numeric g = gcd(p, e);
+            if (g == 1) continue;
+            e = e.div(g);
+            if (g != p) {
+                numeric pg = p.div(g);
+                primes[i] = pg;
+                // It is an overkill to test g with every other
+                // prime, since we know that only pg can divide
+                // it. Still, this is both correct and easy.
+                todo.push_back(g);
+            }
+            i--;
+        }
+        if (e != 1) {
+            primes.push_back(e);
+        }
+    }
+}
+
+int
+prime_power(const numeric &n, const numeric &prime)
+{
+    int power = 0;
+    numeric num = n.numer();
+    for (;; power++) {
+        numeric nn = num.div(prime);
+        if (nn.denom() != 1) break;
+        num = nn;
+    }
+    numeric den = n.denom();
+    for (;; power--) {
+        numeric dd = den.div(prime);
+        if (dd.denom() != 1) break;
+        den = dd;
+    }
+    return power;
+}
+
+/* This routine tries to simplify a given matrix by rescaling
+ * the diagonal blocks in a way that cancels common numerical
+ * factors in various terms of the matrix.
+ */
+pair<pfmatrix, transformation>
+simplify_by_rescaling(const pfmatrix &m)
+{
+    pfmatrix pfm = m;
+    transformation tr(m.nrows);
+    int nfc = 0;
+    for (;;) {
+        bool done = true;
+        for (int offs = pfm.nrows - 1; offs >= 0; offs--) {
+            numvector fmul, fdiv;
+            logd("Looking at rescaling integral {}", offs);
+            numvector coprimes;
+            for (const auto &kv : pfm.residues) {
+                const auto &ci = kv.second;
+                for (unsigned r = 0; r < pfm.nrows; r++) {
+                    if (r == (unsigned)offs) continue;
+                    const auto &k = ci(r, offs);
+                    if (k.is_zero()) continue;
+                    numeric ic = k.integer_content();
+                    fmul.push_back(ic);
+                    digest_coprimes(coprimes, ic);
+                }
+                for (unsigned c = 0; c < pfm.ncols; c++) {
+                    if (c == (unsigned)offs) continue;
+                    const auto &k = ci(offs, c);
+                    if (k.is_zero()) continue;
+                    numeric ic = k.integer_content();
+                    fdiv.push_back(ic);
+                    digest_coprimes(coprimes, ic);
+                }
+            }
+            logd("Terms multiplied by the scaling coefficient: {}", fmul);
+            logd("Terms divided by the scaling coefficient terms: {}", fdiv);
+            sort(coprimes.begin(), coprimes.end());
+            logd("Coprimes: {}", coprimes);
+            numeric overall_factor = 1;
+            for (auto prime : coprimes) {
+                map<int, unsigned> powcntmul, powcntdiv;
+                set<int> powers;
+                logd("Power counts for {}:", prime);
+                for (auto &&f : fmul) {
+                    int p = prime_power(f, prime);
+                    powcntmul[p] += 1;
+                    powers.insert(p);
+                    powers.insert(-p);
+                }
+                for (auto &&f : fdiv) {
+                    int p = prime_power(f, prime);
+                    powcntdiv[p] += 1;
+                    powers.insert(p);
+                    powers.insert(-p);
+                }
+                for (auto &&pc : powcntmul) {
+                    logd("- power of {}+k -> {} term(s)", pc.first, pc.second);
+                }
+                for (auto &&pc : powcntdiv) {
+                    logd("- power of {}-k -> {} term(s)", pc.first, pc.second);
+                }
+                // Select the power with the largest cancellation
+                // count, preferring larger numerators in cases
+                // of a tie.
+                int bestc = 0;
+                int bestp = 0;
+                int bestnum = 0;
+                for (int power : powers) {
+                    int ccnt = powcntmul[-power] + powcntdiv[power];
+                    if (ccnt < bestc) continue;
+                    int num = 0;
+                    for (auto &&pc : powcntmul) {
+                        if (pc.first + power > 0) num += pc.second;
+                        if (pc.first + power < 0) num -= pc.second;
+                    }
+                    for (auto &&pc : powcntdiv) {
+                        if (pc.first - power > 0) num += pc.second;
+                        if (pc.first - power < 0) num -= pc.second;
+                    }
+                    if ((ccnt > bestc) || ((ccnt == bestc) && (num > bestnum))) {
+                        bestc = ccnt;
+                        bestp = power;
+                        bestnum = num;
+                    }
+                }
+                int zeroc = powcntmul[0] + powcntdiv[0];
+                if (bestc > zeroc) {
+                    logd("The best power of {} is {}; it cancels {} factors, {} more than 0 does", prime, bestp, bestc, bestc - zeroc);
+                    nfc += bestc - zeroc;
+                    overall_factor *= prime.power(bestp);
+                } else {
+                    logd("No power of {} improves over 0, which cancels {} factors", prime, zeroc);
+                }
+            }
+            if (overall_factor != 1) {
+                matrix t = identity_matrix(pfm.nrows);
+                matrix invt = identity_matrix(pfm.nrows);
+                t(offs, offs) = overall_factor;
+                invt(offs, offs) = 1/overall_factor;
+                logi("Rescaling integral {} by a factor of {} with:\n{}", offs, overall_factor, t);
+                pfm = pfm.with_constant_t(invt, t);
+                tr.add_constant_t(invt, t);
+                done = false;
+            }
+        }
+        if (done) break;
+        logd("We'll now make one more pass");
+    }
+    logd("Total factors cancelled: {}", nfc);
+    return make_pair(pfm, tr);
+}
+
 /* Logging formatters
  * ============================================================
  */
@@ -2681,12 +2847,23 @@ log_format(ostream &o, const matrix &m)
 template<> inline void
 log_format(ostream &o, const vector<int> &v)
 {
-    o << "[";
+    o << "{";
     for (size_t i = 0; i < v.size(); i++) {
         if (i != 0) o << ", ";
         o << v[i];
     }
-    o << "]";
+    o << "}";
+}
+
+template<> inline void
+log_format(ostream &o, const numvector &v)
+{
+    o << "{";
+    for (size_t i = 0; i < v.size(); i++) {
+        if (i != 0) o << ", ";
+        o << v[i];
+    }
+    o << "}";
 }
 
 template<> inline void

@@ -369,10 +369,12 @@ main(int argc, char *argv[])
     else IFCMD("simplify", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
         pfmatrix pfm(ms.first, x);
-        auto r = simplify_off_diagonal_blocks(pfm);
-        matrix_m = r.first.to_matrix();
-        matrix_t = r.second.to_matrix();
-        matrix_i = r.second.to_inverse_matrix();
+        auto r1 = simplify_off_diagonal_blocks(pfm);
+        auto r2 = simplify_by_rescaling(r1.first);
+        r1.second.add(r2.second);
+        matrix_m = r2.first.to_matrix();
+        matrix_t = r1.second.to_matrix();
+        matrix_i = r1.second.to_inverse_matrix();
     }
     else if (argc == 0) {
         cerr << "fuchsia: no command provided (use -h to see usage)" << endl;
