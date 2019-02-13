@@ -2,10 +2,38 @@
 
 static const char usagetext[] = R"(
 Ss{NAME}
-    Nm{fuchsia} -- transform linear differential equations into epsilon form.
+    Nm{fuchsia} -- transform linear differential equations into an epsilon
+    form.
 
 Ss{SYNOPSYS}
     Nm{fuchsia} [options] Cm{command} Ar{args} ...
+
+Ss{DESCRIPTION}
+    Nm{fuchsia} transforms systems of linear differential equations,
+        ∂/∂x I(x, eps) = M(x, eps) I(x, eps),
+    into an epsilon form,
+        ∂/∂x J(x, eps) = eps S(x) J(x, eps),
+    where I and J are column vectors of functions in the original and
+    epsilon basis, M is the original matrix, eps*S is the matrix in an
+    epsilon form, and I is related to J via the transformation matrix
+    T(x, eps) such that
+        I = T J.
+
+    In all cases M can depend on additional symbolic variables, which are
+    threated as independent constants.
+
+Ss{EXAMPLES}
+    To reduce a single-variable differential system of equations to an
+    epsilon form, use this:
+
+    Nm{fuchsia} Cm{reduce} Fl{-x} Ar{x} Fl{-e} Ar{eps} Ar{matrix.orig} Fl{-m} Ar{matrix.ep} Fl{-t} Ar{matrix.ep.t} \
+        Fl{-C} 2>&1 | tee Ar{matrix.ep.log}
+
+    For differential equations in multiple variables this is the usage:
+
+    Nm{fuchsia} Cm{reduce} Ar{matrix.x} Ar{matrix.y} Fl{-x} Ar{x} Fl{-x} Ar{y} Fl{-e} Ar{eps} \
+        Fl{-m} Ar{matrix.ep.x} Fl{-m} Ar{matrix.ep.y} Fl{-t} Ar{matrix.ep.t} \
+        Fl{-C} 2>&1 | tee Ar{matrix.ep.log}
 
 Ss{COMMANDS}
     Cm{show} [Fl{-x} Ar{name}] Ar{matrix}
@@ -16,28 +44,41 @@ Ss{COMMANDS}
         this is a combination of Cm{reduce-diagonal-blocks},
         Cm{fuchsify-off-diagonal-blocks} and Cm{factorize}.
 
+    Cm{reduce} [Fl{-x} Ar{name}] ... [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] ... [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix} ...
+        Find an epsilon form of a given multivariate differential equation
+        system. A matching number of Ar{matrix} arguments, Fl{-x}, and
+        Fl{-m} flags is required.
+
+        The matrices are reduced one by one, and a single transformation
+        is computed that simultaneously transforms all of them into an
+        epsilon form. It may be best to list the simplest matrix first.
+
+        NOTE: that this command is under development, and may fail when
+        it shouldn't have.
+
     Cm{reduce-diagonal-blocks} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
-        Transform the matrix into block-triangular form and reduce the diagonal
-        blocks into epsilon form.
+        Transform the matrix into a block-triangular form and reduce the
+        diagonal blocks into an epsilon form.
 
     Cm{fuchsify-off-diagonal-blocks} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
-        Transform the off-diagonal blocks of a block-triangular matrix into
-        Fuchsian form, assuming the diagonal blocks are already in epsilon
-        form, thus making the whole matrix normalized Fuchsian.
+        Transform the off-diagonal blocks of a block-triangular matrix
+        into a Fuchsian form, assuming the diagonal blocks are already in
+        an epsilon form, thus making the whole matrix normalized Fuchsian.
 
     Cm{factorize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
-        Find a transformation that will make a given normalized Fuchsian matrix
-        proportional to the infinitesimal parameter.
+        Find a transformation that will make a given normalized Fuchsian
+        matrix proportional to the infinitesimal parameter.
 
     Cm{fuchsify} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
-        Find a transformation that will transform a given matrix into Fuchsian
-        form. This is less efficient than block-based commands, because it
-        effectively treats the whole matrix as one big block.
+        Find a transformation that will transform a given matrix into a
+        Fuchsian form. This is less efficient than block-based commands,
+        because it effectively treats the whole matrix as one big block.
 
     Cm{normalize} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
-        Find a transformation that will transform a given Fuchsian matrix into
-        normalized form. This is less efficient than block-based commands,
-        because it effectively treats the whole matrix as one big block.
+        Find a transformation that will transform a given Fuchsian matrix
+        into a normalized form. This is less efficient than block-based
+        commands, because it effectively treats the whole matrix as one
+        big block.
 
     Cm{sort} [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find a block-triangular form of the given matrix by shuffling.
@@ -59,12 +100,13 @@ Ss{COMMANDS}
 
 Ss{OPTIONS}
     Fl{-x} Ar{name}    Use this name for the free variable (default: x).
+    Fl{-0} Ar{expr}    Set this value for x during multivariate reduction (default: 0).
     Fl{-y} Ar{name}    Use this name for the new free variable (default: y).
     Fl{-e} Ar{name}    Use this name for the infinitesimal parameter (default: eps).
     Fl{-m} Ar{path}    Save the resulting matrix into this file.
     Fl{-t} Ar{path}    Save the resulting transformation into this file.
     Fl{-i} Ar{path}    Save the inverse transformation into this file.
-    Fl{-C}         Force colored output even stdout is not a tty.
+    Fl{-C}         Force colored output even if stdout is not a tty.
     Fl{-P}         Paranoid mode: spend more time checking internal invariants.
     Fl{-q}         Print a more quiet log.
     Fl{-h}         Show this help message.
@@ -140,21 +182,23 @@ usage()
 int
 main(int argc, char *argv[])
 {
-    const char *var_x_name = "x";
+    vector<const char *> var_x_names;
+    vector<const char *> var_x_values;
     const char *var_y_name = "y";
     const char *var_eps_name = "eps";
-    const char *matrix_m_path = NULL;
+    vector <const char *>matrix_m_paths;
     const char *matrix_t_path = NULL;
     const char *matrix_i_path = NULL;
-    for (int opt; (opt = getopt(argc, argv, "hqx:e:y:m:t:i:s:CPV")) != -1;) {
+    for (int opt; (opt = getopt(argc, argv, "hq0:x:e:y:m:t:i:s:CPV")) != -1;) {
         switch (opt) {
         case 'h': usage(); return 0;
         case 'V': cout << VERSION; return 0;
         case 'q': VERBOSE = false; break;
-        case 'x': var_x_name = optarg; break;
+        case 'x': var_x_names.push_back(optarg); break;
+        case '0': var_x_values.push_back(optarg); break;
         case 'y': var_y_name = optarg; break;
         case 'e': var_eps_name = optarg; break;
-        case 'm': matrix_m_path = optarg; break;
+        case 'm': matrix_m_paths.push_back(optarg); break;
         case 't': matrix_t_path = optarg; break;
         case 'i': matrix_i_path = optarg; break;
         case 'P': PARANOID = true; break;
@@ -164,13 +208,23 @@ main(int argc, char *argv[])
     }
     argc -= optind;
     argv += optind;
+    vector<matrix> matrices_m;
     matrix matrix_m(0, 0);
     matrix matrix_t(0, 0);
     matrix matrix_i(0, 0);
-    symbol x(var_x_name);
     symbol y(var_y_name);
     symbol eps(var_eps_name);
-    symtab vars = {{var_x_name, x}, {var_y_name, y}, {var_eps_name, eps}};
+    symtab vars = {{var_y_name, y}, {var_eps_name, eps}};
+    vector<symbol> vars_x;
+    if (var_x_names.size() == 0) {
+        var_x_names.push_back("x");
+    };
+    for (auto &&name : var_x_names) {
+        symbol x(name);
+        vars[name] = x;
+        vars_x.push_back(x);
+    }
+    const symbol &x = vars_x[vars_x.size() - 1];
     IFCMD("help", argc == 1) {
         usage();
         return 0;
@@ -239,13 +293,30 @@ main(int argc, char *argv[])
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
-    else IFCMD("reduce", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        pfmatrix pfm(ms.first, x);
-        auto r = reduce(pfm, eps);
-        matrix_m = r.first.to_matrix();
-        matrix_t = r.second.to_matrix();
-        matrix_i = r.second.to_inverse_matrix();
+    else IFCMD("reduce", argc >= 2) {
+        if ((size_t)(argc - 1) != var_x_names.size()) {
+            cerr << "fuchsia: got " << argc - 1
+                 << " matrices and " << var_x_names.size()
+                 << " variable names -- these should match" << endl;
+            return 1;
+        }
+        vector<matrix> mlist;
+        for (int i = 1; i < argc; i++) {
+            matrix m;
+            tie(m, vars) = load_matrix(argv[i], vars);
+            mlist.push_back(m);
+        }
+        vector<ex> vals_x;
+        parser reader(vars);
+        for (auto &&value : var_x_values) {
+            vals_x.push_back(reader(value));
+        }
+        auto r = reduce_multivar(mlist, vars_x, vals_x, eps);
+        for (auto &&pfm : r.first) {
+            matrices_m.push_back(pfm.to_matrix());
+        }
+        matrix_t = r.second.first;
+        matrix_i = r.second.second;
     }
     else IFCMD("reduce-diagonal-blocks", argc == 2) {
         auto ms = load_matrix(argv[1], vars);
@@ -386,38 +457,60 @@ main(int argc, char *argv[])
              << "' (use -h to see usage)" << endl;
         return 1;
     }
-    if (matrix_m.nops() > 0) {
-        if (matrix_m_path != NULL) {
-            logi("Saving the matrix to {}", matrix_m_path);
-            save_matrix(matrix_m_path, matrix_m);
-        } else {
-            save_matrix(cout, matrix_m);
-            cout << endl;
-        }
+    if (matrix_m.nops() != 0) matrices_m.push_back(matrix_m);
+    // Saving the resulting diff. eq. matrices.
+    size_t nsave = min(matrix_m_paths.size(), matrices_m.size());
+    for (size_t i = 0; i < nsave; i++) {
+        logi("Saving a diff. eq. matrix to {}", matrix_m_paths[i]);
+        save_matrix(matrix_m_paths[i], matrices_m[i]);
     }
-    if (matrix_t.nops() > 0) {
-        if (matrix_t_path != NULL) {
-            logd("Saving the (unsimplified) transformation to {}", matrix_t_path);
-            save_matrix(matrix_t_path, matrix_t);
-            logd("Simplifying the transformation...");
-            matrix t = normal(matrix_t);
-            logi("Saving the transformation to {}", matrix_t_path);
-            save_matrix(matrix_t_path, t);
-        } else {
-            logi("Not saving the transformation matrix (no -t argument)");
-        }
+    for (size_t i = nsave; i < matrices_m.size(); i++) {
+        logi("Printing a diff. eq. matrix to the standard output (no -m argument)");
+        save_matrix(cout, matrices_m[i]);
+        cout << endl;
     }
-    if (matrix_i.nops() > 0) {
-        if (matrix_i_path != NULL) {
-            logd("Saving the (unsimplified) inverse transformation to {}", matrix_i_path);
-            save_matrix(matrix_i_path, matrix_i);
-            logd("Simplifying the inverse transformation...");
-            matrix i = normal(matrix_i);
-            logi("Saving the inverse transformation to {}", matrix_i_path);
-            save_matrix(matrix_i_path, i);
-        } else {
-            logd("Not saving the inverse transformation matrix (no -i argument)");
-        }
+    for (size_t i = nsave; i < matrix_m_paths.size(); i++) {
+        loge("No matrix to save into {}", matrix_m_paths[i]);
+    }
+    // Saving the transformation matrix.
+    if (matrix_t.nops() != 0 && matrix_t_path != NULL) {
+        logi("Saving the (unsimplified) transformation to {}", matrix_t_path);
+        save_matrix(matrix_t_path, matrix_t);
+    }
+    if (matrix_t.nops() != 0 && matrix_t_path == NULL) {
+        logw("Not saving the transformation matrix (no -t argument)");
+    }
+    if (matrix_t.nops() == 0 && matrix_t_path != NULL) {
+        loge("No transformation matrix to save into {}", matrix_t_path);
+    }
+    // Saving the inverse transformation matrix.
+    if (matrix_i.nops() != 0 && matrix_i_path != NULL) {
+        logi("Saving the (unsimplified) inverse transformation to {}", matrix_i_path);
+        save_matrix(matrix_i_path, matrix_i);
+    }
+    if (matrix_i.nops() != 0 && matrix_i_path == NULL) {
+        logd("Not saving the inverse transformation matrix (no -i argument)");
+    }
+    if (matrix_i.nops() == 0 && matrix_i_path != NULL) {
+        loge("No inverse transformation matrix to save into {}", matrix_i_path);
+    }
+    // Re-saving the simplified transformation matrices.
+    //
+    // This final simplification can take a while, and the idea
+    // is that the user can Ctrl-C out of Fuchsia without waiting
+    // for it, while still having the unsimplified versions
+    // saved.
+    if (matrix_t.nops() != 0 && matrix_t_path != NULL) {
+        logd("Simplifying the transformation...");
+        matrix t = normal(matrix_t);
+        logi("Saving the simplified transformation to {}", matrix_t_path);
+        save_matrix(matrix_t_path, t);
+    }
+    if (matrix_i.nops() != 0 && matrix_i_path != NULL) {
+        logd("Simplifying the inverse transformation...");
+        matrix i = normal(matrix_i);
+        logi("Saving the simplified inverse transformation to {}", matrix_i_path);
+        save_matrix(matrix_i_path, i);
     }
     return 0;
 }

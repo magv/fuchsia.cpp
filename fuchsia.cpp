@@ -120,12 +120,20 @@ logi(const char *fmt, const Args &...args)
     log_fmt(COLORS ? "\033[32m[inf " : "[inf ", COLORS ? "]\033[0m " : "] ", fmt, args...);
 }
 
+/* Log a warning message.
+ */
+template<typename... Args> static inline void
+logw(const char *fmt, const Args &...args)
+{
+    log_fmt(COLORS ? "\033[1;34m[wrn " : "[wrn ", "] ", fmt, args...);
+}
+
 /* Log an error message.
  */
 template<typename... Args> static inline void
 loge(const char *fmt, const Args &...args)
 {
-    log_fmt(COLORS ? "\033[31m[err " : "[err ", "] ", fmt, args...);
+    log_fmt(COLORS ? "\033[1;31m[err " : "[err ", "] ", fmt, args...);
 }
 
 template<typename F>
@@ -998,6 +1006,12 @@ matrix
 transform(const matrix &m, const matrix &t, const symbol &x)
 {
     return t.inverse().mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
+}
+
+matrix
+transform(const matrix &m, const matrix &tinverse, const matrix &t, const symbol &x)
+{
+    return tinverse.mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
 }
 
 pfmatrix
@@ -2550,6 +2564,66 @@ reduce(const pfmatrix &m, const symbol &eps)
     assert(is_normal(mt3.first, eps));
     assert(is_factorized(mt3.first, eps));
     return make_pair(mt3.first, t);
+}
+
+pair<vector<pfmatrix>, pair<matrix, matrix>>
+reduce_multivar(const vector<matrix> &m, const vector<symbol> &x, const vector<ex> &x0, const symbol &eps)
+{
+    assert(m.size() == x.size());
+    vector<pfmatrix> result;
+    matrix t = identity_matrix(m[0].rows());
+    matrix tinv = identity_matrix(m[0].rows());
+    exmap varsub = {};
+    for (size_t i = 0; i < m.size(); i++) {
+        logi("Reducing a diff. eq. system in {}", x[i]);
+        if (i == 0) {
+            pfmatrix pfm(m[i], x[i]);
+            auto r = reduce(pfm, eps);
+            result.push_back(r.first);
+            t = r.second.to_matrix();
+            tinv = r.second.to_inverse_matrix();
+        }
+        else {
+            if (i <= x0.size()) {
+                logi("From now on {} will be equal to {}", x[i - 1], x0[i - 1]);
+                varsub[x[i - 1]] = x0[i - 1];
+            }
+            else {
+                logi("From now on {} will be equal to 0 (the default value)", x[i - 1]);
+                varsub[x[i - 1]] = 0;
+            }
+            matrix mi = transform(m[i], tinv, t, x[i]);
+            // It's faster to operate on numbers than on symbols,
+            // so we'll reduce mi at x[<i]=x0[<i], and then
+            // apply the transformation to the original mi. We
+            // can do this, because the transformation should
+            // not depend on x[<i].
+            logd("Substituting {} ...", varsub);
+            matrix misubs = matrix_map(mi,
+                [&](auto &&e) {
+                    try {
+                        return e.subs(varsub);
+                    } catch(GiNaC::pole_error) {
+                        return normal(e).subs(varsub);
+                    }
+                }
+            );
+            pfmatrix pfm(misubs, x[i]);
+            auto r = reduce(pfm, eps);
+            matrix tt = r.second.to_matrix();
+            matrix ttinv = r.second.to_inverse_matrix();
+            for (size_t j = 0; j < i; j++) {
+                result[j] = result[j].with_constant_t(ttinv, tt);
+                assert(is_fuchsian(result[j]));
+                assert(is_factorized(result[j], eps));
+                assert(is_normal(result[j], eps));
+            }
+            result.push_back(r.second.apply(pfmatrix(mi, x[i])));
+            t = t.mul(tt);
+            tinv = ttinv.mul(tinv);
+        }
+    }
+    return make_pair(result, make_pair(t, tinv));
 }
 
 /* Simplification
