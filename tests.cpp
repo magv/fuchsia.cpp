@@ -55,9 +55,8 @@ TEST_CASE("matrix save/load") {
         {x, 0, (x-1)/(y*y*y+1)},
     };
     save_matrix("/tmp/fuchsia.test.m", m1);
-    symtab s = {{"x", x}, {"y", y}};
-    matrix m2;
-    tie(m2, s) = load_matrix("/tmp/fuchsia.test.m", s);
+    parser reader(symtab({{"x", x}, {"y", y}}));
+    matrix m2 = load_matrix("/tmp/fuchsia.test.m", reader);
     REQUIRE(m1 == m2);
 }
 

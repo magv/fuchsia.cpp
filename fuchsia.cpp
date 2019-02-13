@@ -267,8 +267,8 @@ infinity_t::print(const print_context & c, unsigned level) const
 
 /* Load matrix from a stream in Mathematica format.
  */
-pair<matrix, symtab>
-load_matrix(istream &i, const symtab &table)
+matrix
+load_matrix(istream &i, parser &reader)
 {
     for (int depth = 0;;) {
         int c = i.get();
@@ -294,23 +294,22 @@ load_matrix(istream &i, const symtab &table)
             }
         }
     }
-    parser reader(table);
     ex x = reader(i);
     // TODO: check that the input is indeed a matrix of rational
     // expressions, with no imaginary or irrational numbers; signal
     // errors if this is not the case.
     matrix m = ex_to<matrix>(lst_to_matrix(ex_to<lst>(x)));
-    return make_pair(m, reader.get_syms());
+    return m;
 }
 
 /* Load matrix from a file in Mathematica format.
  */
-pair<matrix, symtab>
-load_matrix(const char *filename, const symtab &table)
+matrix
+load_matrix(const char *filename, parser &reader)
 {
     ifstream i(filename);
     if (!i) throw parse_error("the matrix file was not found");
-    return load_matrix(i, table);
+    return load_matrix(i, reader);
 }
 
 /* Write matrix to a stream object in Mathematica format.
@@ -975,6 +974,12 @@ pfmatrix::with_off_diagonal_t(const matrix &D, const ex &p, int k) const
         assert(normal(m.to_matrix().sub(mm)).is_zero_matrix());
     }
     return m;
+}
+
+pfmatrix
+load_pfmatrix(const char *filename, const symbol &x, parser &reader)
+{
+    return pfmatrix(load_matrix(filename, reader), x);
 }
 
 /* Transformations

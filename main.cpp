@@ -214,14 +214,14 @@ main(int argc, char *argv[])
     matrix matrix_i(0, 0);
     symbol y(var_y_name);
     symbol eps(var_eps_name);
-    symtab vars = {{var_y_name, y}, {var_eps_name, eps}};
+    parser reader(symtab({{var_y_name, y}, {var_eps_name, eps}}));
     vector<symbol> vars_x;
     if (var_x_names.size() == 0) {
         var_x_names.push_back("x");
     };
     for (auto &&name : var_x_names) {
         symbol x(name);
-        vars[name] = x;
+        reader.get_syms()[name] = x;
         vars_x.push_back(x);
     }
     const symbol &x = vars_x[vars_x.size() - 1];
@@ -230,12 +230,10 @@ main(int argc, char *argv[])
         return 0;
     }
     else IFCMD("show", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        cout << "Matrix size: " << ms.first.rows() << "x" << ms.first.cols() << endl;
-        pfmatrix pfm(ms.first, x);
+        matrix m = load_matrix(argv[1], reader);
+        cout << "Matrix size: " << m.rows() << "x" << m.cols() << endl;
+        pfmatrix pfm(m, x);
         cout << "Matrix complexity: " << complexity(pfm) << endl;
-        cout << "Matrix shape: " << endl;
-        print_matrix_shape(cout, pfm.to_matrix(), "  ");
         cout << "Matrix expansion:" << endl;
         for (const auto kv : pfm.residues) {
             const auto &xi = kv.first.first;
@@ -262,32 +260,29 @@ main(int argc, char *argv[])
         }
     }
     else IFCMD("sort", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        block_triangular_permutation btp(ms.first);
+        matrix m = load_matrix(argv[1], reader);
+        block_triangular_permutation btp(m);
         logi("Block sizes: {}", btp.block_size());
-        matrix_m = btp.t().transpose().mul(ms.first).mul(btp.t());
+        matrix_m = btp.t().transpose().mul(m).mul(btp.t());
         matrix_t = btp.t();
         matrix_i = btp.t().transpose();
     }
     else IFCMD("fuchsify", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        pfmatrix pfm(ms.first, x);
+        pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
         auto r = fuchsify(pfm);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
     else IFCMD("normalize", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        pfmatrix pfm(ms.first, x);
+        pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
         auto r = normalize(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
     else IFCMD("factorize", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        pfmatrix pfm(ms.first, x);
+        pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
         auto r = factorize(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
@@ -302,12 +297,10 @@ main(int argc, char *argv[])
         }
         vector<matrix> mlist;
         for (int i = 1; i < argc; i++) {
-            matrix m;
-            tie(m, vars) = load_matrix(argv[i], vars);
+            matrix m = load_matrix(argv[i], reader);
             mlist.push_back(m);
         }
         vector<ex> vals_x;
-        parser reader(vars);
         for (auto &&value : var_x_values) {
             vals_x.push_back(reader(value));
         }
@@ -319,42 +312,36 @@ main(int argc, char *argv[])
         matrix_i = r.second.second;
     }
     else IFCMD("reduce-diagonal-blocks", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        pfmatrix pfm(ms.first, x);
+        pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
         auto r = reduce_diagonal_blocks(pfm, eps);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
     else IFCMD("fuchsify-off-diagonal-blocks", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        pfmatrix pfm(ms.first, x);
+        pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
         auto r = fuchsify_off_diagonal_blocks(pfm);
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
     }
     else IFCMD("transform", argc >= 3) {
-        matrix m;
-        tie(m, vars) = load_matrix(argv[1], vars);
+        matrix m = load_matrix(argv[1], reader);
         for (int i = 2; i < argc; i++) {
-            matrix t;
-            tie(t, vars) = load_matrix(argv[i], vars);
+            matrix t = load_matrix(argv[i], reader);
             m = t.inverse().mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
         }
         pfmatrix pfm(m, x);
         matrix_m = pfm.to_matrix();
     }
     else IFCMD("changevar", argc == 3) {
-        auto ms = load_matrix(argv[1], vars);
-        parser reader(ms.second);
+        matrix m = load_matrix(argv[1], reader);
         auto xsubs = reader(argv[2]);
-        matrix m2 = ex_to_matrix(ms.first.subs(exmap{{x, xsubs}})).mul_scalar(xsubs.diff(y));
+        matrix m2 = ex_to_matrix(m.subs(exmap{{x, xsubs}})).mul_scalar(xsubs.diff(y));
         matrix_m = pfmatrix(m2, y).to_matrix();
     }
     else IFCMD("suggest-changevar", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        pfmatrix pfm(ms.first, x);
+        pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
         exset halfpoints;
         for (auto &&kv : pfm.residues) {
             const auto &pi = kv.first.first;
@@ -438,8 +425,7 @@ main(int argc, char *argv[])
         }
     }
     else IFCMD("simplify", argc == 2) {
-        auto ms = load_matrix(argv[1], vars);
-        pfmatrix pfm(ms.first, x);
+        pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
         auto r1 = simplify_off_diagonal_blocks(pfm);
         auto r2 = simplify_by_rescaling(r1.first);
         r1.second.add(r2.second);
