@@ -10,17 +10,19 @@ Ss{SYNOPSYS}
 
 Ss{DESCRIPTION}
     Nm{fuchsia} transforms systems of linear differential equations,
-        ∂/∂x I(x, eps) = M(x, eps) I(x, eps),
-    into an epsilon form,
-        ∂/∂x J(x, eps) = eps S(x) J(x, eps),
-    where I and J are column vectors of functions in the original and
-    epsilon basis, M is the original matrix, eps*S is the matrix in an
-    epsilon form, and I is related to J via the transformation matrix
-    T(x, eps) such that
-        I = T J.
+        Dl{∂/∂x I(x,ε) = M(x,ε) I(x,ε),}
 
-    In all cases M can depend on additional symbolic variables, which are
-    threated as independent constants.
+    into an epsilon form,
+        Dl{∂/∂x J(x,ε) = ε S(x) J(x,ε),}
+
+    where Ql{I} and Ql{J} are column vectors of functions in the original
+    and epsilon basis, Ql{M} is the original matrix, Ql{ε*S} is the
+    matrix in an epsilon form, and Ql{I} is related to Ql{J} via the
+    transformation matrix Ql{T(x,ε)} such that
+        Dl{I = T J.}
+
+    In all cases Ql{M} can depend on additional symbolic variables, which
+    are treated as independent constants.
 
 Ss{EXAMPLES}
     To reduce a single-variable differential system of equations to an
@@ -53,8 +55,8 @@ Ss{COMMANDS}
         is computed that simultaneously transforms all of them into an
         epsilon form. It may be best to list the simplest matrix first.
 
-        NOTE: that this command is under development, and may fail when
-        it shouldn't have.
+        NOTE: this command is under development, and may fail when it
+        shouldn't.
 
     Cm{reduce-diagonal-blocks} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Transform the matrix into a block-triangular form and reduce the
@@ -162,6 +164,8 @@ usage()
         if (l[-2] == 'F' && l[-1] == 'l') { a = "\033[33m"; }
         if (l[-2] == 'C' && l[-1] == 'm') { a = "\033[1m"; }
         if (l[-2] == 'A' && l[-1] == 'r') { a = "\033[32m"; }
+        if (l[-2] == 'D' && l[-1] == 'l') { a = "\033[36m"; }
+        if (l[-2] == 'Q' && l[-1] == 'l') { a = "\033[36m"; }
         cout.write(p, l - p - 2);
         if (COLORS) cout << a;
         cout.write(l + 1, r - l - 1);
