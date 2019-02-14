@@ -642,6 +642,8 @@ struct pfmatrix {
     pfmatrix with_off_diagonal_t(const matrix &D, const ex &p, int k) const;
 };
 
+typedef vector<pfmatrix> pfmatrixvec;
+
 bool
 pfmatrix::key_is_less::operator ()(const key &k1, const key &k2) const
 {
@@ -1168,6 +1170,7 @@ class block_triangular_permutation {
     public:
     block_triangular_permutation(const matrix &m);
     block_triangular_permutation(const pfmatrix &m);
+    block_triangular_permutation(const pfmatrixvec &mvec);
     const matrix & t();
     const vector<int> &block_size();
 
@@ -1216,9 +1219,31 @@ boolean_matrix(const pfmatrix &m)
     return b;
 }
 
+matrix
+boolean_matrix(const pfmatrixvec &mvec)
+{
+    assert(mvec.size() > 0);
+    matrix b(mvec[0].nrows, mvec[0].ncols);
+    for (auto &&m : mvec) {
+        assert((m.nrows == b.rows()) && (m.ncols == b.cols()));
+        for (auto &kv : m.residues) {
+            auto &&ci = kv.second;
+            for (unsigned k = 0; k < ci.nops(); k++) {
+                if (!ci.op(k).is_zero()) b.let_op(k) = 1;
+            }
+        }
+    }
+    return b;
+}
+
 block_triangular_permutation::
 block_triangular_permutation(const pfmatrix &m)
     : block_triangular_permutation(boolean_matrix(m))
+{ }
+
+block_triangular_permutation::
+block_triangular_permutation(const pfmatrixvec &mvec)
+    : block_triangular_permutation(boolean_matrix(mvec))
 { }
 
 const matrix &
@@ -1856,6 +1881,16 @@ complexity(const pfmatrix &pfm)
         const auto &ci = kv.second;
         c += complexity(pi);
         c += complexity(ci);
+    }
+    return c;
+}
+
+int
+complexity(const pfmatrixvec &pfmvec)
+{
+    int c = 0;
+    for (const auto &pfm : pfmvec) {
+        c += complexity(pfm);
     }
     return c;
 }
@@ -2571,11 +2606,11 @@ reduce(const pfmatrix &m, const symbol &eps)
     return make_pair(mt3.first, t);
 }
 
-pair<vector<pfmatrix>, pair<matrix, matrix>>
+pair<pfmatrixvec, pair<matrix, matrix>>
 reduce_multivar(const vector<matrix> &m, const vector<symbol> &x, const vector<ex> &x0, const symbol &eps)
 {
     assert(m.size() == x.size());
-    vector<pfmatrix> result;
+    pfmatrixvec result;
     matrix t = identity_matrix(m[0].rows());
     matrix tinv = identity_matrix(m[0].rows());
     exmap varsub = {};
@@ -2648,6 +2683,16 @@ nonzero_count(const pfmatrix &pfm)
     return nnz;
 }
 
+int
+nonzero_count(const pfmatrixvec &pfmvec)
+{
+    int nnz = 0;
+    for (auto &&pfm : pfmvec) {
+        nnz += nonzero_count(pfm);
+    }
+    return nnz;
+}
+
 /* This simplification routine tries to increase the number of
  * zero terms in off-diagonal parts of the matrix with constant
  * transformations.
@@ -2656,29 +2701,33 @@ nonzero_count(const pfmatrix &pfm)
  * eps/(1+eps) are skipped, so it's best if epsilon cancels
  * out, which is guaranteed in the epsilon form.
  */
-pair<pfmatrix, transformation>
-simplify_off_diagonal_blocks(const pfmatrix &m)
+pfmatrixvec
+simplify_off_diagonal_blocks(const pfmatrixvec &mvec, transformation &tr)
 {
     LOGME;
-    block_triangular_permutation btp(m);
-    pfmatrix pfm = m.with_constant_t(btp.t().transpose(), btp.t());
+    assert(mvec.size() > 0);
+    unsigned nrows = mvec[0].nrows;
+    block_triangular_permutation btp(mvec);
     logi("Shuffle into block-diagonal form with:\n{}", btp.t());
     logd("Block sizes: {}", btp.block_size());
-    transformation tr(m.nrows);
+    pfmatrixvec pfmvec;
+    for (auto &&m : mvec) {
+        pfmvec.push_back(m.with_constant_t(btp.t().transpose(), btp.t()));
+    }
     tr.add_constant_t(btp.t().transpose(), btp.t());
     auto bs = btp.block_size();
-    int nterms1 = nonzero_count(pfm);
+    int nterms1 = nonzero_count(pfmvec);
     logd("Initial number of non-zero terms: {}", nterms1);
     for (;;) {
         bool done = true;
         // Traversing rows from the bottom to the top. This way
         // the bottom row collects the least amount of garbage
         // coefficients.
-        for (int row = pfm.nrows, ir = bs.size() - 1; ir >= 0; ir--) {
+        for (unsigned row = nrows, ir = bs.size(); ir-- > 0;) {
             int rowend = row;
             row -= bs[ir];
-            for (int r = rowend - 1; r >= row; r--) {
-                for (int c = 0; c < row; c++) {
+            for (unsigned r = rowend; r-- > row;) {
+                for (unsigned c = 0; c < row; c++) {
                     logd("Looking at {}:{}", r, c);
                     // Off-diagonal transformation 1+K*1(r,c), with r>c, has this effect:
                     // 1) m[rr, c] += K*m[rr, r]
@@ -2688,7 +2737,8 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                     // become (or remain) non-zero. Our strategy is to
                     // find K that results in the most zeros.
                     map<ex, int, ex_is_less> kzerocnt;
-                    for (const auto &kv : pfm.residues) {
+                    for (auto &&pfm : pfmvec)
+                    for (auto &&kv : pfm.residues) {
                         const auto &ci = kv.second;
                         // ci'(r, c) = ci(r, c) + K*(ci(r, r) - ci(c, c))
                         ex dc = normal(ci(r, r) - ci(c, c));
@@ -2696,14 +2746,14 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                             ex k = ratcan(-ci(r, c)/dc);
                             if (k.info(info_flags::rational)) kzerocnt[k] += 1;
                         }
-                        for (int rr = row; rr < (int)pfm.nrows; rr++) {
+                        for (unsigned rr = row; rr < nrows; rr++) {
                             if (rr == r) continue;
                             // ci'(rr, c) = ci(rr, c) + K*ci(rr, r);
                             if (ci(rr, r).is_zero()) continue;
                             ex k = ratcan(-ci(rr, c)/ci(rr, r));
                             if (k.info(info_flags::rational)) kzerocnt[k] += 1;
                         }
-                        for (int cc = 0; cc < row; cc++) {
+                        for (unsigned cc = 0; cc < row; cc++) {
                             if (cc == c) continue;
                             // ci'(r, cc) = ci(r, cc) - K*ci(c, cc);
                             if (ci(c, cc).is_zero()) continue;
@@ -2726,15 +2776,17 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
                     })->first;
                     if (kzerocnt[k] > kzerocnt[0]) {
                         logd("* best k here is: {} (should eliminate {} terms)", k, kzerocnt[k] - kzerocnt[0]);
-                        matrix t = identity_matrix(pfm.nrows);
-                        matrix invt = identity_matrix(pfm.nrows);
+                        matrix t = identity_matrix(nrows);
+                        matrix invt = identity_matrix(nrows);
                         t(r, c) = k;
                         invt(r, c) = -k;
                         logi("Use constant transformation:\n{}", t);
-                        int n1 = nonzero_count(pfm);
-                        pfm = pfm.with_constant_t(invt, t);
+                        int n1 = nonzero_count(pfmvec);
+                        for (auto &pfm : pfmvec) {
+                            pfm = pfm.with_constant_t(invt, t);
+                        }
                         tr.add_constant_t(invt, t);
-                        int n2 = nonzero_count(pfm);
+                        int n2 = nonzero_count(pfmvec);
                         logd("Term reduction: {} ({} vs {})", n1 - n2, n2, n1);
                         done = false;
                     }
@@ -2744,9 +2796,9 @@ simplify_off_diagonal_blocks(const pfmatrix &m)
         if (done) break;
         logd("We'll now make an additional pass");
     }
-    int nterms2 = nonzero_count(pfm);
+    int nterms2 = nonzero_count(pfmvec);
     logd("Total terms eliminated: {} ({} vs {})", nterms1 - nterms2, nterms2, nterms1);
-    return make_pair(pfm, tr);
+    return pfmvec;
 }
 
 /* Find new coprimes by factoring a given number into an existing
@@ -2804,21 +2856,23 @@ prime_power(const numeric &n, const numeric &prime)
  * the diagonal blocks in a way that cancels common numerical
  * factors in various terms of the matrix.
  */
-pair<pfmatrix, transformation>
-simplify_by_rescaling(const pfmatrix &m)
+pfmatrixvec
+simplify_by_rescaling(const pfmatrixvec &mvec, transformation &tr)
 {
-    pfmatrix pfm = m;
-    transformation tr(m.nrows);
+    assert(mvec.size() > 0);
+    pfmatrixvec pfmvec = mvec;
+    unsigned nrows = mvec[0].nrows;
     int nfc = 0;
     for (;;) {
         bool done = true;
-        for (int offs = pfm.nrows - 1; offs >= 0; offs--) {
+        for (int offs = nrows - 1; offs >= 0; offs--) {
             numvector fmul, fdiv;
             logd("Looking at rescaling integral {}", offs);
             numvector coprimes;
-            for (const auto &kv : pfm.residues) {
+            for (auto &&pfm : pfmvec)
+            for (auto &&kv : pfm.residues) {
                 const auto &ci = kv.second;
-                for (unsigned r = 0; r < pfm.nrows; r++) {
+                for (unsigned r = 0; r < nrows; r++) {
                     if (r == (unsigned)offs) continue;
                     const auto &k = ci(r, offs);
                     if (k.is_zero()) continue;
@@ -2896,12 +2950,14 @@ simplify_by_rescaling(const pfmatrix &m)
                 }
             }
             if (overall_factor != 1) {
-                matrix t = identity_matrix(pfm.nrows);
-                matrix invt = identity_matrix(pfm.nrows);
+                matrix t = identity_matrix(nrows);
+                matrix invt = identity_matrix(nrows);
                 t(offs, offs) = overall_factor;
                 invt(offs, offs) = 1/overall_factor;
                 logi("Rescaling integral {} by a factor of {} with:\n{}", offs, overall_factor, t);
-                pfm = pfm.with_constant_t(invt, t);
+                for (auto &&pfm : pfmvec) {
+                    pfm = pfm.with_constant_t(invt, t);
+                }
                 tr.add_constant_t(invt, t);
                 done = false;
             }
@@ -2910,7 +2966,7 @@ simplify_by_rescaling(const pfmatrix &m)
         logd("We'll now make one more pass");
     }
     logd("Total factors cancelled: {}", nfc);
-    return make_pair(pfm, tr);
+    return pfmvec;
 }
 
 /* Logging formatters

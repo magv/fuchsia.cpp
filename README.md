@@ -138,10 +138,10 @@ For differential equations in multiple variables this is the usage:
   eigenvalues of the form n/2+k×eps into n+k×eps, thus making it
   possible to find an epsilon form of the matrix.
 
-* **simplify** [-x *name*] [-m *path*] [-t *path*] [-i *path*] *matrix*
+* **simplify** [-x *name*] ... [-m *path*] ... [-t *path*] [-i *path*] *matrix* ...
 
-  Try to find a transformation that makes a given matrix
-  simpler, for some definition of "simple".
+  Try to find a transformation that makes a given matrix (or a set
+  of matrices) simpler, for some definition of "simple".
 
 ## OPTIONS
 

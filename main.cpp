@@ -96,9 +96,9 @@ Ss{COMMANDS}
         eigenvalues of the form n/2+k*eps into n+k*eps, thus making it
         possible to find an epsilon form of the matrix.
 
-    Cm{simplify} [Fl{-x} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
-        Try to find a transformation that makes a given matrix
-        simpler, for some definition of "simple".
+    Cm{simplify} [Fl{-x} Ar{name}] ... [Fl{-m} Ar{path}] ... [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix} ...
+        Try to find a transformation that makes a given matrix (or a set
+        of matrices) simpler, for some definition of "simple".
 
 Ss{OPTIONS}
     Fl{-x} Ar{name}    Use this name for the free variable (default: x).
@@ -428,14 +428,28 @@ main(int argc, char *argv[])
                     halfpoints.size() + infinity_too);
         }
     }
-    else IFCMD("simplify", argc == 2) {
-        pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
-        auto r1 = simplify_off_diagonal_blocks(pfm);
-        auto r2 = simplify_by_rescaling(r1.first);
-        r1.second.add(r2.second);
-        matrix_m = r2.first.to_matrix();
-        matrix_t = r1.second.to_matrix();
-        matrix_i = r1.second.to_inverse_matrix();
+    else IFCMD("simplify", argc >= 2) {
+        if ((size_t)(argc - 1) != var_x_names.size()) {
+            cerr << "fuchsia: got " << argc - 1
+                 << " matrices and " << var_x_names.size()
+                 << " variable names -- these should match" << endl;
+            return 1;
+        }
+        pfmatrixvec pfmvec;
+        for (int i = 1; i < argc; i++) {
+            pfmvec.push_back(load_pfmatrix(argv[i], vars_x[i - 1], reader));
+        }
+        transformation tr(pfmvec[0].nrows);
+        int c0 = complexity(pfmvec);
+        logd("Initial matrix complexity: {}", c0);
+        pfmvec = simplify_off_diagonal_blocks(pfmvec, tr);
+        pfmvec = simplify_by_rescaling(pfmvec, tr);
+        logd("Final matrix complexity: {} (was: {})", complexity(pfmvec), c0);
+        for (auto &&pfm : pfmvec) {
+            matrices_m.push_back(pfm.to_matrix());
+        }
+        matrix_t = tr.to_matrix();
+        matrix_i = tr.to_inverse_matrix();
     }
     else if (argc == 0) {
         cerr << "fuchsia: no command provided (use -h to see usage)" << endl;
