@@ -1200,7 +1200,7 @@ block_triangular_permutation(const matrix &m)
         index_counter(0),
         output_counter(0)
 {
-    for (int i = 0; i < (int)m.rows(); i++) {
+    for (unsigned i = 0; i < m.rows(); i++) {
         if (nodes[i].index == -1)
             visit(i);
     }
@@ -2417,9 +2417,9 @@ factorize(const pfmatrix &m, const symbol &eps, bool block_only=false)
         }
     }
     logd("Searching the best out of {}", stlist.size());
-    int besti = 0;
+    unsigned besti = 0;
     int bestc = complexity(stlist[besti].first);
-    for (int i = 1; i < stlist.size(); i++) {
+    for (unsigned i = 1; i < stlist.size(); i++) {
         int c = complexity(stlist[i].first);
         if (c < bestc) {
             besti = i;
@@ -2487,10 +2487,10 @@ fuchsify_off_diagonal_blocks(const pfmatrix &m)
     pfmatrix pfm = m.with_constant_t(btp.t().transpose(), btp.t());
     auto bs = btp.block_size();
     unsigned offs1 = 0;
-    for (int i1 = 0; i1 < (int)bs.size(); i1++) {
+    for (unsigned i1 = 0; i1 < bs.size(); i1++) {
         unsigned size1 = bs[i1];
         unsigned offs2 = offs1;
-        for (int i2 = i1 - 1; i2 >= 0; i2--) {
+        for (unsigned i2 = i1; i2-- > 0;) {
             unsigned size2 = bs[i2];
             offs2 -= size2;
 loop:;
@@ -2865,7 +2865,7 @@ simplify_by_rescaling(const pfmatrixvec &mvec, transformation &tr)
     int nfc = 0;
     for (;;) {
         bool done = true;
-        for (int offs = nrows - 1; offs >= 0; offs--) {
+        for (unsigned offs = nrows; offs-- > 0;) {
             numvector fmul, fdiv;
             logd("Looking at rescaling integral {}", offs);
             numvector coprimes;
@@ -2873,7 +2873,7 @@ simplify_by_rescaling(const pfmatrixvec &mvec, transformation &tr)
             for (auto &&kv : pfm.residues) {
                 const auto &ci = kv.second;
                 for (unsigned r = 0; r < nrows; r++) {
-                    if (r == (unsigned)offs) continue;
+                    if (r == offs) continue;
                     const auto &k = ci(r, offs);
                     if (k.is_zero()) continue;
                     numeric ic = k.integer_content();
@@ -2881,7 +2881,7 @@ simplify_by_rescaling(const pfmatrixvec &mvec, transformation &tr)
                     digest_coprimes(coprimes, ic);
                 }
                 for (unsigned c = 0; c < pfm.ncols; c++) {
-                    if (c == (unsigned)offs) continue;
+                    if (c == offs) continue;
                     const auto &k = ci(offs, c);
                     if (k.is_zero()) continue;
                     numeric ic = k.integer_content();
