@@ -2632,22 +2632,21 @@ reduce_multivar(const vector<matrix> &m, const vector<symbol> &x, const vector<e
                 logi("From now on {} will be equal to 0 (the default value)", x[i - 1]);
                 varsub[x[i - 1]] = 0;
             }
+            logd("Normalizing the transformation matrices ...");
+            t = normal(t);
+            tinv = normal(tinv);
             matrix mi = transform(m[i], tinv, t, x[i]);
             // It's faster to operate on numbers than on symbols,
             // so we'll reduce mi at x[<i]=x0[<i], and then
             // apply the transformation to the original mi. We
             // can do this, because the transformation should
             // not depend on x[<i].
-            logd("Substituting {} ...", varsub);
-            matrix misubs = matrix_map(mi,
-                [&](auto &&e) {
-                    try {
-                        return e.subs(varsub);
-                    } catch(GiNaC::pole_error) {
-                        return normal(e).subs(varsub);
-                    }
-                }
-            );
+            logd("Normalizing the matrix in {}, and substituting {} ...", x[i], varsub);
+            matrix misubs(mi.rows(), mi.cols());
+            for (unsigned i = 0; i < mi.nops(); i++) {
+                mi[i] = normal(mi[i]);
+                misubs[i] = mi[i].subs(varsub);
+            }
             pfmatrix pfm(misubs, x[i]);
             auto r = reduce(pfm, eps);
             matrix tt = r.second.to_matrix();
