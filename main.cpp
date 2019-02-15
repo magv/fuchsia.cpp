@@ -44,7 +44,7 @@ Ss{COMMANDS}
     Cm{reduce} [Fl{-x} Ar{name}] [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix}
         Find an epsilon form of the given matrix. Internally
         this is a combination of Cm{reduce-diagonal-blocks},
-        Cm{fuchsify-off-diagonal-blocks} and Cm{factorize}.
+        Cm{fuchsify-off-diagonal-blocks}, Cm{factorize}, and Cm{simplify}.
 
     Cm{reduce} [Fl{-x} Ar{name}] ... [Fl{-e} Ar{name}] [Fl{-m} Ar{path}] ... [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix} ...
         Find an epsilon form of a given multivariate differential equation
@@ -309,11 +309,15 @@ main(int argc, char *argv[])
             vals_x.push_back(reader(value));
         }
         auto r = reduce_multivar(mlist, vars_x, vals_x, eps);
-        for (auto &&pfm : r.first) {
+        pfmatrixvec pfmvec = r.first;
+        transformation tr(r.second.first.rows());
+        pfmvec = simplify_off_diagonal_blocks(pfmvec, tr);
+        pfmvec = simplify_by_rescaling(pfmvec, tr);
+        for (auto &&pfm : pfmvec) {
             matrices_m.push_back(pfm.to_matrix());
         }
-        matrix_t = r.second.first;
-        matrix_i = r.second.second;
+        matrix_t = r.second.first.mul(tr.to_matrix());
+        matrix_i = tr.to_inverse_matrix().mul(r.second.second);
     }
     else IFCMD("reduce-diagonal-blocks", argc == 2) {
         pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
