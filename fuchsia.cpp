@@ -1052,57 +1052,72 @@ transformation::apply(const pfmatrix &m) const
 }
 
 matrix
+balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x)
+{
+    matrix cop = identity_matrix(p.rows()).sub(p);
+    if (x1 == infinity) {
+        return cop.add(p.mul_scalar(-(x - x2)));
+    }
+    else if (x2 == infinity) {
+        return cop.add(p.mul_scalar(-1/(x - x1)));
+    }
+    else {
+        return cop.add(p.mul_scalar((x - x2)/(x - x1)));
+    }
+}
+
+matrix
 transformation::to_matrix() const
 {
-    ex balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x);
-    ex m = unit_matrix(size);
+    matrix m = identity_matrix(size);
     for (const auto &c : components) {
         switch (c.first) {
         case tk_constant:
-            m *= c.second.op(1);
+            m = m.mul(ex_to_matrix(c.second.op(1)));
             break;
         case tk_balance:
-            m *= balance_t_matrix(
+            m = m.mul(balance_t_matrix(
                     ex_to_matrix(c.second.op(0)),
                     c.second.op(1),
                     c.second.op(2),
-                    c.second.op(3));
+                    c.second.op(3)));
             break;
         case tk_off_diagonal:
-            m *= unit_matrix(size) +
+            m = m.mul(ex_to_matrix(unit_matrix(size) +
                     pow(c.second.op(3) - c.second.op(1), c.second.op(2))*
-                        c.second.op(0);
+                        c.second.op(0)));
             break;
         }
+        m = normal(m);
     }
-    return ex_to_matrix(m);
+    return m;
 }
 
 matrix
 transformation::to_inverse_matrix() const
 {
-    ex balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x);
-    ex m = unit_matrix(size);
+    matrix m = identity_matrix(size);
     for (const auto &c : components) {
         switch (c.first) {
         case tk_constant:
-            m = c.second.op(0)*m;
+            m = ex_to_matrix(c.second.op(0)).mul(m);
             break;
         case tk_balance:
             m = balance_t_matrix(
                     ex_to_matrix(c.second.op(0)),
                     c.second.op(2),
                     c.second.op(1),
-                    c.second.op(3))*m;
+                    c.second.op(3)).mul(m);
             break;
         case tk_off_diagonal:
-            m = (unit_matrix(size) -
+            m = ex_to_matrix(unit_matrix(size) -
                     pow(c.second.op(3) - c.second.op(1), c.second.op(2))*
-                        c.second.op(0))*m;
+                        c.second.op(0)).mul(m);
             break;
         }
+        m = normal(m);
     }
-    return ex_to_matrix(m);
+    return m;
 }
 
 transformation
@@ -1895,21 +1910,6 @@ complexity(const pfmatrixvec &pfmvec)
     return c;
 }
 
-ex
-balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x)
-{
-    matrix cop = identity_matrix(p.rows()).sub(p);
-    if (x1 == infinity) {
-        return cop - (x - x2)*p;
-    }
-    else if (x2 == infinity) {
-        return cop - 1/(x - x1)*p;
-    }
-    else {
-        return cop + (x - x2)/(x - x1)*p;
-    }
-}
-
 pair<pfmatrix, transformation>
 fuchsify(const pfmatrix &m)
 {
@@ -2620,6 +2620,7 @@ reduce_multivar(const vector<matrix> &m, const vector<symbol> &x, const vector<e
             pfmatrix pfm(m[i], x[i]);
             auto r = reduce(pfm, eps);
             result.push_back(r.first);
+            logd("Combining the transformation matrices ...");
             t = r.second.to_matrix();
             tinv = r.second.to_inverse_matrix();
         }
@@ -2632,9 +2633,11 @@ reduce_multivar(const vector<matrix> &m, const vector<symbol> &x, const vector<e
                 logi("From now on {} will be equal to 0 (the default value)", x[i - 1]);
                 varsub[x[i - 1]] = 0;
             }
-            logd("Normalizing the transformation matrices ...");
-            t = normal(t);
-            tinv = normal(tinv);
+            if (i >= 2) {
+                logd("Normalizing the transformation matrices ...");
+                t = normal(t);
+                tinv = normal(tinv);
+            }
             matrix mi = transform(m[i], tinv, t, x[i]);
             // It's faster to operate on numbers than on symbols,
             // so we'll reduce mi at x[<i]=x0[<i], and then
@@ -2649,8 +2652,10 @@ reduce_multivar(const vector<matrix> &m, const vector<symbol> &x, const vector<e
             }
             pfmatrix pfm(misubs, x[i]);
             auto r = reduce(pfm, eps);
+            logd("Combining the transformation matrices ...");
             matrix tt = r.second.to_matrix();
             matrix ttinv = r.second.to_inverse_matrix();
+            logd("Transforming the previous matrices...");
             for (size_t j = 0; j < i; j++) {
                 result[j] = result[j].with_constant_t(ttinv, tt);
                 assert(is_fuchsian(result[j]));
