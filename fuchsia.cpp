@@ -2385,16 +2385,30 @@ factorize(const pfmatrix &m, const symbol &eps, bool block_only=false)
     }
     logd("Solving {} linear equations in {} variables", eqs.nops(), tmp.nops());
     ex sol = lsolve(eqs, tmp);
-    logd("Found a solution");
+    logd("Found a solution, normalizing it...");
+    // The normal() is here to prevent false division by zero
+    // during the subsequent substitutions, and to generally
+    // simplify the expression.
     matrix_map_inplace(t, [&](auto &&e) { return e.subs(sol); });
+    rescale_submatrix(t, 0, t.rows(), 0, t.cols());
+    logd("The general transformation is:\n{}", t);
+    if (t.is_zero_matrix()) {
+        throw fuchsia_error("factorize(): the matrix is not factorizable");
+    }
     tmp.append(mu);
     vector<pair<matrix, matrix>> stlist;
-    for (int range = 0, attempt = 1; stlist.size() < 16;) {
-        if (--attempt < 0) {
-            attempt = 16;
+    for (int range = 0, attempt = 1; stlist.size() < 16; attempt++) {
+        if (attempt % 16 == 0) {
             range++;
         }
-        logd("Substituting free variables, range={}", range);
+        if ((attempt == 64) && (stlist.size() == 0)) {
+            logd("Hmm, let's check if the transformation is invertible at all");
+            if (t.rank() < t.rows()) {
+                throw fuchsia_error("factorize(): the matrix is not factorizable");
+            }
+            logd("It is; let's keep going");
+        }
+        logd("Substituting free variables, range={}, attempt {}, {} found so far", range, attempt, stlist.size());
         try {
             exmap map;
             for (unsigned i = 0; i < tmp.nops(); i++) {
@@ -2429,7 +2443,9 @@ factorize(const pfmatrix &m, const symbol &eps, bool block_only=false)
     auto &&st = stlist[besti];
     logi("Use constant transformation of complexity {}:\n{}", complexity(st.first), st.first);
     tr.add_constant_t(st.second, st.first);
-    return make_pair(pfm.with_constant_t(st.second, st.first), tr);
+    pfm = pfm.with_constant_t(st.second, st.first);
+    assert(is_factorized(pfm, eps));
+    return make_pair(pfm, tr);
 }
 
 /* Block reduction
@@ -2595,7 +2611,14 @@ reduce(const pfmatrix &m, const symbol &eps)
     LOGME;
     auto mt1 = reduce_diagonal_blocks(m, eps);
     auto mt2 = fuchsify_off_diagonal_blocks(mt1.first);
-    auto mt3 = factorize(mt2.first, eps, true);
+    auto mt3 = [&]() {
+        try {
+            return factorize(mt2.first, eps, true);
+        } catch (const fuchsia_error &e) {
+            logi("Could not factorize preserving the block structure: {}; trying the general way", e.what());
+            return factorize(mt2.first, eps, false);
+        }
+    } ();
     transformation t(m.nrows);
     t.add(mt1.second);
     t.add(mt2.second);

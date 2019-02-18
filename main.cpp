@@ -287,7 +287,14 @@ main(int argc, char *argv[])
     }
     else IFCMD("factorize", argc == 2) {
         pfmatrix pfm = load_pfmatrix(argv[1], x, reader);
-        auto r = factorize(pfm, eps);
+        auto r = [&]() {
+            try {
+                return factorize(pfm, eps, true);
+            } catch (const fuchsia_error &e) {
+                logi("Could not factorize preserving the block structure: {}; trying the general way", e.what());
+                return factorize(pfm, eps, false);
+            }
+        } ();
         matrix_m = r.first.to_matrix();
         matrix_t = r.second.to_matrix();
         matrix_i = r.second.to_inverse_matrix();
