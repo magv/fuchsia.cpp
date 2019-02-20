@@ -954,7 +954,22 @@ pfmatrix::with_off_diagonal_t(const matrix &D, const ex &p, int k) const
     //    = M + (x-p)^k (M D - D M - 1/x k D)
     LOGME;
     assert(normal(D.mul(D)).is_zero_matrix());
+    assert(D.cols() == nrows);
+    assert(D.rows() == nrows);
     pfmatrix m = *this;
+    if (PARANOID) {
+        // Check that D is off-diagonal.
+        for (unsigned r = 0; r < nrows; r++) {
+            for (unsigned c = 0; c < ncols; c++) {
+                if (!D(r, c).is_zero()) {
+                    for (auto &kv : residues) {
+                        const auto &ci = kv.second;
+                        assert(ci(c, r).is_zero());
+                    }
+                }
+            }
+        }
+    }
     for (auto &kv : residues) {
         const auto &pi = kv.first.first;
         const auto &ki = kv.first.second;
@@ -2678,14 +2693,19 @@ reduce_multivar(const vector<matrix> &m, const vector<symbol> &x, const vector<e
             logd("Combining the transformation matrices ...");
             matrix tt = r.second.to_matrix();
             matrix ttinv = r.second.to_inverse_matrix();
-            logd("Transforming the previous matrices...");
+            logd("Re-transforming the current matrix without substitutions...");
+            // Note: can't use r.second.apply here, because mi might have
+            // a different block structure from misubs, which makes e.g.
+            // off-diagonal transformations inside r.second to apply to
+            // blocks in mi, which is an error.
+            result.push_back(pfmatrix(transform(mi, ttinv, tt, x[i]), x[i]));
+            logd("Transforming the preceeding matrices...");
             for (size_t j = 0; j < i; j++) {
                 result[j] = result[j].with_constant_t(ttinv, tt);
                 assert(is_fuchsian(result[j]));
                 assert(is_factorized(result[j], eps));
                 assert(is_normal(result[j], eps));
             }
-            result.push_back(r.second.apply(pfmatrix(mi, x[i])));
             t = t.mul(tt);
             tinv = ttinv.mul(tinv);
         }
