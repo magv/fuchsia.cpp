@@ -2200,6 +2200,10 @@ normalize(const pfmatrix &m, const symbol &eps)
                     throw fuchsia_error("normalize(): unsupported form of eigenvalue");
                 }
                 numeric ev0n = ex_to<numeric>(ev0);
+                if (ev0n.denom() != 1) {
+                    loge("This eigenvalue of residue at {}={} has a fractional constant part, and can not be normalized: {}", pfm.x, pi, eval);
+                    throw fuchsia_error("normalize(): fractional form of eigenvalue");
+                }
                 if (ev0n < numeric(-1, 2)) {
                     residues1.push_back(Residue { pi, ci, eval, eigenvectors_right(ci, eval) });
                 }
@@ -2222,6 +2226,10 @@ normalize(const pfmatrix &m, const symbol &eps)
                     throw fuchsia_error("normalize(): unsupported form of eigenvalue");
                 }
                 numeric ev0n = ex_to<numeric>(ev0);
+                if (ev0n.denom() != 1) {
+                    loge("This eigenvalue of residue at {}={} has a fractional constant part, and can not be normalized: {}", pfm.x, infinity, eval);
+                    throw fuchsia_error("normalize(): fractional form of eigenvalue");
+                }
                 if (ev0n < numeric(-1, 2)) {
                     residues1.push_back(Residue { infinity, c0inf, eval, eigenvectors_right(c0inf, eval) });
                 }
