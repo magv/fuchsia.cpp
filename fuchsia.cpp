@@ -624,6 +624,7 @@ struct pfmatrix {
     matrix to_matrix() const;
     pfmatrix block(unsigned offset, unsigned size) const;
     void normalize();
+    void dropzeros();
     // M += C*(x-pi)^ki
     void add(const matrix &C, const ex &p1, int k1);
     // M += C*(x-pi)^ki/(x-p2)
@@ -740,6 +741,19 @@ pfmatrix::normalize()
     for (auto it = residues.begin(); it != residues.end();) {
         auto &ci = it->second;
         ci = normal(ci);
+        if (ci.is_zero_matrix()) {
+            it = residues.erase(it);
+        } else {
+            it++;
+        }
+    }
+}
+
+void
+pfmatrix::dropzeros()
+{
+    for (auto it = residues.begin(); it != residues.end();) {
+        auto &ci = it->second;
         if (ci.is_zero_matrix()) {
             it = residues.erase(it);
         } else {
@@ -1971,7 +1985,7 @@ fuchsify(const pfmatrix &m)
         for (auto &kvi : poincare_map) {
             const auto &xi = kvi.first;
             const auto &ki = kvi.second;
-            const auto c = (xi != infinity) ? pfm(xi, ki) : (ki != -1) ? pfm(0, ki) : c0inf;
+            const auto c = (xi != infinity) ? pfm(xi, ki) : (ki != -1) ? pfm(0, ki).mul_scalar(-1) : c0inf;
             if (c.is_zero_matrix()) continue;
             if (abs(ki + 1) > 0) {
                 logd("- pole with power {} at {}={}, complexity={}, residue rank={}",
@@ -1991,11 +2005,12 @@ fuchsify(const pfmatrix &m)
             const auto &pi = kvi.first;
             const auto &ki = kvi.second;
             if (ki == -1) continue;
-            const auto a0 = (pi != infinity) ? pfm(pi, ki) : pfm(0, ki);
+            const auto a0 = (pi != infinity) ? pfm(pi, ki) : pfm(0, ki).mul_scalar(-1);
             if (a0.is_zero_matrix()) continue;
+            unsigned a0rank = a0.rank();
             done = false;
-            const auto a1 = (pi != infinity) ? pfm(pi, ki + 1) : (ki != 0) ? pfm(0, ki - 1) : c0inf;
-            symbol lambda("L");
+            const auto a1 = (pi != infinity) ? pfm(pi, ki + 1) : (ki != 0) ? pfm(0, ki - 1).mul_scalar(-1) : c0inf;
+            symbol lambda("LL");
             // n = (a0 a1-l)
             //     (0  a0  )
             matrix n(2*a0.rows(), 2*a0.cols());
@@ -2046,32 +2061,32 @@ fuchsify(const pfmatrix &m)
                 if (pi == pj) continue;
                 /* To guarantee progress, we only reduce from
                  * points with higher Poincare rank to the ones
-                 * with lower.
+                 * with lower or equal. In the latter case, we
+                 * also make sure the total residue rank is
+                 * decreasing (this doesn't always happen).
                  */
-                if (abs(kj + 1) >= abs(ki + 1)) continue;
-                const auto b0 = (pj != infinity) ? pfm(pj, kj) : (kj != -1) ? pfm(0, kj) : c0inf;
+                if (abs(kj + 1) > abs(ki + 1)) continue;
+                const auto b0 = (pj != infinity) ? pfm(pj, kj) : (kj != -1) ? pfm(0, kj).mul_scalar(-1) : c0inf;
                 if (b0.is_zero_matrix()) continue;
-                logi("Looking at reductions between {} and {}", pi, pj);
-                bool nosinglevector = true;
-                if (ws.dim() > 1) {
-                    for (unsigned b = 0; b < ws.dim(); b++) {
-                        logd("Looking at basis vector {}", b);
-                        for (auto &&dualb : dual_basis_spanning_left_invariant_subspace(b0, ws.basis_col(b))) {
-                            auto p = normal(ws.basis_col(b).mul(dualb));
-                            auto pfm2 = pfm.with_balance_t(p, pi, pj);
-                            logd("Complexity: {}", complexity(pfm2));
-                            reductions.push_back(Reduction { pi, pj, p, pfm2 });
-                            nosinglevector = false;
-                        }
+                logi("Looking at reductions between {}={} (power {}) and {}={} (power {})", pfm.x, pi, ki, pfm.x, pj, kj);
+                unsigned b0rank = b0.rank();
+                for (auto &&dualb : dual_basis_spanning_left_invariant_subspace(b0, wscols)) {
+                    auto p = normal(wscols.mul(dualb));
+                    auto pfm2 = pfm.with_balance_t(p, pi, pj);
+                    logd("Complexity: {}", complexity(pfm2));
+                    const auto a0primerank = (pi != infinity) ? pfm2(pi, ki).rank() : pfm2(0, ki).rank();
+                    const auto b0primerank = ((pj != infinity) ? pfm2(pj, kj) : (kj != -1) ? pfm2(0, kj) : c0_infinity(pfm2)).rank();
+                    logd("Residue ranks: {} + {} -> {} + {}", a0rank, b0rank, a0primerank, b0primerank);
+                    if (a0rank <= a0primerank) {
+                        logd("The rank of residue at {}={} did not improve. Hmm... Skip.", pfm.x, pi);
+                        continue;
                     }
-                }
-                if (nosinglevector) {
-                    for (auto &&dualb : dual_basis_spanning_left_invariant_subspace(b0, wscols)) {
-                        auto p = normal(wscols.mul(dualb));
-                        auto pfm2 = pfm.with_balance_t(p, pi, pj);
-                        logd("Complexity: {}", complexity(pfm2));
-                        reductions.push_back(Reduction { pi, pj, p, pfm2 });
-                    }
+                    if ((abs(kj + 1) == abs(ki + 1)) && (a0rank + b0rank <= a0primerank + b0primerank)) {
+                        logd("The ranks did not improve that much; skip.");
+                        continue;
+                    };
+                    pfm2.dropzeros();
+                    reductions.push_back(Reduction { pi, pj, p, pfm2 });
                 }
             }
             ex randomp = randint(-10, 10);
@@ -2088,24 +2103,15 @@ fuchsify(const pfmatrix &m)
             }
         }
         if (done) { break; }
+        for (auto &&r : reductions) {
+            logi("Reduction between {} and {} can give complexity {}", r.pi, r.pj, complexity(r.pfm));
+        }
         if (reductions.size() > 0) {
-            // Find and apply the smallest reduction.
-            size_t mini = 0;
-            int minc = complexity(reductions[0].pfm);
-            logi("Reduction between {} and {} can give complexity {}",
-                    reductions[0].pi, reductions[0].pj, minc);
-            logd("Projector:\n{}", reductions[0].p);
-            for (size_t i = 1; i < reductions.size(); i++) {
-                int c = complexity(reductions[i].pfm);
-                if (c < minc) {
-                    mini = i;
-                    minc = c;
-                }
-                logi("Reduction between {} and {} can give complexity {}",
-                        reductions[i].pi, reductions[i].pj, c);
-                logd("Projector:\n{}", reductions[i].p);
-            }
-            Reduction &r = reductions[mini];
+            auto &r = *min_element(begin(reductions), end(reductions), [](auto &&r1, auto &&r2) -> bool {
+                int c1 = complexity(r1.pfm);
+                int c2 = complexity(r2.pfm);
+                return c1 < c2;
+            });
             logi("Use balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
             t.add_balance_t(r.p, r.pi, r.pj, pfm.x);
             pfm = r.pfm;
@@ -2121,7 +2127,7 @@ fuchsify(const pfmatrix &m)
                 }
             }
             Reduction &r = poor_reductions[mini];
-            logi("apply balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
+            logi("Apply balance between {} and {} with projector:\n{}", r.pi, r.pj, r.p);
             t.add_balance_t(r.p, r.pi, r.pj, pfm.x);
             pfm = r.pfm;
         }
