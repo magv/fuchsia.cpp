@@ -2600,11 +2600,24 @@ loop:;
                     eq.append(numer(eqmx.op(i)) == 0);
                 }
                 ex sol = lsolve(eq, d_vars);
+                if (sol.nops() == 0) {
+                    loge("Failed to find an off-diagonal transformation; are the diagonal blocks in epsilon form?");
+                    throw fuchsia_error("fuchsify_off_diagonal_blocks(): failed to find the transformation");
+                }
                 assert(sol.nops() == d_vars.nops());
+                exmap tempmap;
+                for (unsigned i = 0; i < sol.nops(); i++) {
+                    assert(is_a<relational>(sol.op(i)));
+                    const ex &var = sol.op(i).op(0);
+                    if (var == sol.op(i).op(1)) {
+                        logd("Underdetermined equation system, will set {} to 0", var);
+                        tempmap[var] = 0;
+                    }
+                }
                 matrix D(m.nrows, m.ncols);
                 for (unsigned i = 0; i < size1; i++) {
                     for (unsigned j = 0; j < size2; j++) {
-                        D(offs1 + i, offs2 + j) = d(i, j).subs(sol);
+                        D(offs1 + i, offs2 + j) = d(i, j).subs(sol).subs(tempmap);
                     }
                 }
                 logi("Use off-diagonal transformation, p={}, k={}, D=\n{}", pi, ki + 1, D);
