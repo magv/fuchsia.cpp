@@ -2201,14 +2201,15 @@ normalize(const pfmatrix &m, const symbol &eps)
                 const auto &almul = kv.second;
                 logd("  * eigenvalue^{}: {}", almul, eval);
                 ex ev0 = eval.subs(exmap{{eps, 0}}, subs_options::no_pattern);
-                if (!is_a<numeric>(ev0)) {
-                    logi("this eigenvalue can not be normalized: {}", eval);
-                    throw fuchsia_error("normalize(): unsupported form of eigenvalue");
+                ex zero = 2*(eval-ev0) - (eval-ev0).subs(exmap{{eps, 2*eps}}, subs_options::no_pattern);
+                if (!is_a<numeric>(ev0) || !zero.normal().is_zero()) {
+                    loge("The eigenvalue of residue at {}={} is not of the form n+k*{}: {}", pfm.x, infinity, eps, eval);
+                    throw fuchsia_error("normalize(): eigenvalue can not be normalized");
                 }
                 numeric ev0n = ex_to<numeric>(ev0);
-                if (ev0n.denom() != 1) {
-                    loge("This eigenvalue of residue at {}={} has a fractional constant part, and can not be normalized: {}", pfm.x, pi, eval);
-                    throw fuchsia_error("normalize(): fractional form of eigenvalue");
+                if (!ev0n.is_integer()) {
+                    loge("This eigenvalue of residue at {}={} has a non-integer constant part, and can not be normalized: {}", pfm.x, infinity, eval);
+                    throw fuchsia_error("normalize(): eigenvalue can not be normalized");
                 }
                 if (ev0n < numeric(-1, 2)) {
                     residues1.push_back(Residue { pi, ci, eval, eigenvectors_right(ci, eval) });
@@ -2227,14 +2228,15 @@ normalize(const pfmatrix &m, const symbol &eps)
                 const auto &almul = kv.second;
                 logd("  * eigenvalue^{}: {}", almul, eval);
                 ex ev0 = eval.subs(exmap{{eps, 0}}, subs_options::no_pattern);
-                if (!is_a<numeric>(ev0)) {
-                    logi("this eigenvalue can not be normalized: {}", eval);
-                    throw fuchsia_error("normalize(): unsupported form of eigenvalue");
+                ex zero = 2*(eval-ev0) - (eval-ev0).subs(exmap{{eps, 2*eps}}, subs_options::no_pattern);
+                if (!is_a<numeric>(ev0) || !zero.normal().is_zero()) {
+                    loge("The eigenvalue of residue at {}={} is not of the form n+k*{}: {}", pfm.x, infinity, eps, eval);
+                    throw fuchsia_error("normalize(): eigenvalue can not be normalized");
                 }
                 numeric ev0n = ex_to<numeric>(ev0);
-                if (ev0n.denom() != 1) {
-                    loge("This eigenvalue of residue at {}={} has a fractional constant part, and can not be normalized: {}", pfm.x, infinity, eval);
-                    throw fuchsia_error("normalize(): fractional form of eigenvalue");
+                if (!ev0n.is_integer()) {
+                    loge("This eigenvalue of residue at {}={} has a non-integer constant part, and can not be normalized: {}", pfm.x, infinity, eval);
+                    throw fuchsia_error("normalize(): eigenvalue can not be normalized");
                 }
                 if (ev0n < numeric(-1, 2)) {
                     residues1.push_back(Residue { infinity, c0inf, eval, eigenvectors_right(c0inf, eval) });
