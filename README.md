@@ -138,6 +138,9 @@ For differential equations in multiple variables this is the usage:
   eigenvalues of the form n/2+k×eps into n+k×eps, thus making it
   possible to find an epsilon form of the matrix.
 
+  Note that some bad eigenvalues disappear when the matrix is
+  fuchsified, so this routine is best used after "fuchsia fuchsify".
+
 * **simplify** [-x *name*] ... [-m *path*] ... [-t *path*] [-i *path*] *matrix* ...
 
   Try to find a transformation that makes a given matrix (or a set

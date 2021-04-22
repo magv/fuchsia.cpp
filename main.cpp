@@ -96,6 +96,9 @@ Ss{COMMANDS}
         eigenvalues of the form n/2+k*eps into n+k*eps, thus making it
         possible to find an epsilon form of the matrix.
 
+        Note that some bad eigenvalues disappear when the matrix is
+        fuchsified, so this routine is best used after "fuchsia fuchsify".
+
     Cm{simplify} [Fl{-x} Ar{name}] ... [Fl{-m} Ar{path}] ... [Fl{-t} Ar{path}] [Fl{-i} Ar{path}] Ar{matrix} ...
         Try to find a transformation that makes a given matrix (or a set
         of matrices) simpler, for some definition of "simple".
@@ -400,17 +403,19 @@ main(int argc, char *argv[])
         else if (halfpoints.size() == 1 && infinity_too) {
             auto &&it = halfpoints.begin();
             ex a = *it++;
-            logi("This variable change from {} to {} should help:\n{} = {}",
+            symbol t("T");
+            logi("This variable change from {} to {} should help:\n{} = {}, for any value of {}",
                     x, y,
-                    x, a + y*y); // invmoebius(y*y, a, a + 1, infinity)
+                    x, invmoebius(y*y, a, t, infinity), t);
         }
         else if (halfpoints.size() == 2 && !infinity_too) {
             auto &&it = halfpoints.begin();
             ex a = *it++, b = *it++;
-            logi("Any of these variable changes from {} to {} should help:\n{} = {}\n{} = {}",
+            symbol t("T");
+            logi("Any of these variable changes from {} to {} should help:\n{} = {},\n{} = {},\nfor any value of {}.",
                     x, y,
-                    x, (a + b*y*y)/(y*y + 1), // invmoebius(y*y, a, (a + b)/2, b)
-                    x, (b + a*y*y)/(y*y + 1)); // invmoebius(y*y, b, (a + b)/2, a)
+                    x, invmoebius(y*y, a, t, b),
+                    x, invmoebius(y*y, b, t, a), t);
         }
         else if (halfpoints.size() == 2 && infinity_too) {
             auto &&it = halfpoints.begin();

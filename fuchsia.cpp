@@ -2204,6 +2204,7 @@ normalize(const pfmatrix &m, const symbol &eps)
                 ex zero = 2*(eval-ev0) - (eval-ev0).subs(exmap{{eps, 2*eps}}, subs_options::no_pattern);
                 if (!is_a<numeric>(ev0) || !zero.normal().is_zero()) {
                     loge("The eigenvalue of residue at {}={} is not of the form n+k*{}: {}", pfm.x, infinity, eps, eval);
+                    logi("Note that half-integer eigenvalues may be cured by a variable transformation; see: fuchsia suggest-changevar");
                     throw fuchsia_error("normalize(): eigenvalue can not be normalized");
                 }
                 numeric ev0n = ex_to<numeric>(ev0);
@@ -2231,6 +2232,7 @@ normalize(const pfmatrix &m, const symbol &eps)
                 ex zero = 2*(eval-ev0) - (eval-ev0).subs(exmap{{eps, 2*eps}}, subs_options::no_pattern);
                 if (!is_a<numeric>(ev0) || !zero.normal().is_zero()) {
                     loge("The eigenvalue of residue at {}={} is not of the form n+k*{}: {}", pfm.x, infinity, eps, eval);
+                    logi("Note that half-integer eigenvalues may be cured by a variable transformation; see: fuchsia suggest-changevar");
                     throw fuchsia_error("normalize(): eigenvalue can not be normalized");
                 }
                 numeric ev0n = ex_to<numeric>(ev0);
