@@ -2,13 +2,12 @@ CLNSRC=
 GINACSRC=
 
 XCFLAGS=${CFLAGS} \
-	-O0 -g -Wall -Wextra -std=c++14 -pedantic \
-	-pipe -fno-omit-frame-pointer -fpermissive \
-	-fdata-sections -ffunction-sections -Wl,--gc-sections
+	-O1 -g -Wall -Wextra -std=c++14 -pedantic \
+	-pipe -fno-omit-frame-pointer -fpermissive
 XLDFLAGS=${LDFLAGS} \
 	-lginac -lcln -ldl -lgmp
 
-XCFLAGS_STATIC=${XCFLAGS} -Os -s -static
+XCFLAGS_STATIC=${XCFLAGS} -Os -s -static -fdata-sections -ffunction-sections -Wl,--gc-sections
 XLDFLAGS_STATIC=${XLDFLAGS}
 
 all: build/fuchsia
