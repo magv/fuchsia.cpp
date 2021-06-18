@@ -778,7 +778,7 @@ pfmatrix::add_div(const matrix &C, const ex &p1, int k1, const ex &p2)
         add(C, p1, k1 - 1);
     }
     else if (k1 >= 0) {
-        assert(p1 == 0);
+        assert(p1.is_zero());
         for (int k = 0; k < k1; k++) {
             add(C.mul_scalar(pow(p2, k1 - 1 - k)), p1, k);
         }
@@ -809,8 +809,8 @@ pfmatrix::add_mul(const matrix &C, const ex &p1, int k1, const ex &p2)
 void
 pfmatrix::add_pow(const matrix &C, const ex &p1, int k1, const ex &p2, int k2)
 {
-    if (k1 >= 0) assert(p1 == 0);
-    if (k2 >= 0) assert(p2 == 0);
+    if (k1 >= 0) assert(p1.is_zero());
+    if (k2 >= 0) assert(p2.is_zero());
     if (p1 == p2) {
         add(C, p1, k1 + k2);
     }
@@ -1050,12 +1050,26 @@ transform(const matrix &m, const matrix &tinverse, const matrix &t, const symbol
     return tinverse.mul(m.mul(t).sub(ex_to_matrix(t.diff(x))));
 }
 
+matrix
+balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x)
+{
+    matrix cop = identity_matrix(p.rows()).sub(p);
+    if (x1 == infinity) {
+        return cop.add(p.mul_scalar(-(x - x2)));
+    }
+    else if (x2 == infinity) {
+        return cop.add(p.mul_scalar(-1/(x - x1)));
+    }
+    else {
+        return cop.add(p.mul_scalar((x - x2)/(x - x1)));
+    }
+}
+
 pfmatrix
 transformation::apply(const pfmatrix &m) const
 {
     LOGME;
     pfmatrix pfm = m;
-            ex balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x);
     for (const auto &c : components) {
         switch (c.first) {
         case tk_constant:
@@ -1078,21 +1092,6 @@ transformation::apply(const pfmatrix &m) const
         }
     }
     return pfm;
-}
-
-matrix
-balance_t_matrix(const matrix &p, const ex &x1, const ex &x2, const ex &x)
-{
-    matrix cop = identity_matrix(p.rows()).sub(p);
-    if (x1 == infinity) {
-        return cop.add(p.mul_scalar(-(x - x2)));
-    }
-    else if (x2 == infinity) {
-        return cop.add(p.mul_scalar(-1/(x - x1)));
-    }
-    else {
-        return cop.add(p.mul_scalar((x - x2)/(x - x1)));
-    }
 }
 
 matrix
@@ -2595,7 +2594,7 @@ loop:;
                     auto c = matrix_cut(pfm(pi, -1), offs1, size1, offs1, size1);
                     eqmx = b.add(c.mul(d).sub(d.mul(a)).sub(d.mul_scalar(ki + 1)));
                 } else {
-                    assert(pi == 0);
+                    assert(pi.is_zero());
                     // The case of ki >= 0 is special, because all pfm(*, -1)
                     // residues contribute to the transformed off-diagonal
                     // cell. This is because (x-p1)^0 = (x-0)^0.
