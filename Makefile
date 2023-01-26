@@ -34,10 +34,10 @@ build/testrunner.o: testrunner.cpp build/catch.hpp
 	${CXX} ${XCFLAGS} -c -o $@ testrunner.cpp
 
 build/.dir:
-	ln -sf "$$(mktemp -d)" build
+	mkdir -p build
 	touch $@
 
 clean: phony
-	rm -rf $$(readlink -f build) build
+	rm -rf build
 
 phony:;
